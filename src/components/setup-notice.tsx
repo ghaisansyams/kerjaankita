@@ -29,7 +29,7 @@ export function SetupNotice() {
             Let&apos;s connect your database
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            FlowDesk needs a Supabase project before you can sign in. Three quick
+            KerjaanKita needs a Supabase project before you can sign in. Three quick
             steps:
           </p>
 
