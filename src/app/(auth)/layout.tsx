@@ -44,7 +44,7 @@ export default function AuthLayout({
         </div>
 
         <p className="relative text-xs text-slate-500">
-          FlowDesk — project management for IT consultancies.
+          KerjaanKita — project management for IT consultancies.
         </p>
       </div>
 
