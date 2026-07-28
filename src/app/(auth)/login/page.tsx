@@ -16,7 +16,7 @@ export default async function LoginPage({
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to your FlowDesk workspace.
+          Sign in to your KerjaanKita workspace.
         </p>
       </div>
 
