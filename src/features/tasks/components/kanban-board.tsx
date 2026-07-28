@@ -15,7 +15,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { moveTask } from "../actions";
+import { moveTask, updateTaskProgress } from "../actions";
 import { fetchBoardTasks, type BoardTask } from "../queries";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCardBody } from "./kanban-card";
@@ -45,6 +45,8 @@ export function KanbanBoard({
   const [tasks, setTasks] = useState<BoardTask[]>(initialTasks);
   const [activeId, setActiveId] = useState<string | null>(null);
   const draggingRef = useRef(false);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   // True while a move mutation is in flight, so a concurrent realtime event
   // can't refetch stale server state over our optimistic update (QA RC1 · M2).
   const mutatingRef = useRef(false);
@@ -94,6 +96,25 @@ export function KanbanBoard({
   const canMove = useCallback(
     (t: BoardTask) => canAny || (canOwn && t.assignee_id === currentUserId),
     [canAny, canOwn, currentUserId],
+  );
+
+  // Inline progress update from a card — optimistic, guarded, reconciled.
+  const setProgress = useCallback(
+    async (id: string, value: number): Promise<boolean> => {
+      const snapshot = tasksRef.current;
+      setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, progress: value } : t)));
+      mutatingRef.current = true;
+      const res = await updateTaskProgress({ id, progress: value });
+      mutatingRef.current = false;
+      if (!res?.ok) {
+        setTasks(snapshot);
+        toast.error(res?.error.message ?? "Couldn't update progress.");
+        return false;
+      }
+      refetch();
+      return true;
+    },
+    [refetch],
   );
 
   const columns = useMemo(() => {
@@ -189,6 +210,7 @@ export function KanbanBoard({
 
   return (
     <DndContext
+      id="flowdesk-board"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={onDragStart}
@@ -203,6 +225,7 @@ export function KanbanBoard({
             projectId={projectId}
             tasks={columns.byStatus.get(s.id) ?? []}
             canMove={canMove}
+            onSetProgress={setProgress}
           />
         ))}
       </div>
@@ -213,7 +236,7 @@ export function KanbanBoard({
       )}
       <DragOverlay>
         {activeTask && (
-          <div className="w-72">
+          <div className="w-[300px] rotate-2">
             <KanbanCardBody task={activeTask} dragging />
           </div>
         )}
