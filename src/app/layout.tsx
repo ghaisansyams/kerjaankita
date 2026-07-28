@@ -18,11 +18,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "FlowDesk",
-    template: "%s · FlowDesk",
+    default: "KerjaanKita",
+    template: "%s · KerjaanKita",
   },
   description:
-    "FlowDesk — one workspace for IT consultancies. See what every developer is doing today, keep clients in the loop, and know if projects are on track.",
+    "KerjaanKita — one workspace for IT consultancies. See what every developer is doing today, keep clients in the loop, and know if projects are on track.",
 };
 
 export default function RootLayout({
