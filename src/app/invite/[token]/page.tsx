@@ -34,7 +34,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
           <CardContent className="space-y-4 py-10 text-center">
             <p className="text-sm text-muted-foreground">This invitation has already been accepted.</p>
             <Button asChild>
-              <Link href="/dashboard">Open FlowDesk</Link>
+              <Link href="/dashboard">Open KerjaanKita</Link>
             </Button>
           </CardContent>
         ) : (
