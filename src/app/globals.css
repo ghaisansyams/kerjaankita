@@ -49,7 +49,7 @@
 }
 
 /*
-  FlowDesk design tokens.
+  KerjaanKita design tokens.
   Palette: white / slate (neutrals) / indigo (primary) / blue (accents on charts).
   Deliberately calm and professional — no rainbow surfaces. Status/priority colour
   coding lives in soft tinted badges (see src/lib/constants.ts), never on large areas.
