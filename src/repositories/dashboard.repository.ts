@@ -54,3 +54,50 @@ export async function getTaskDueCounts(orgId: string, todayIso: string, weekEndI
     openAssigned: openAssigned.count ?? 0,
   };
 }
+
+/** Tasks completed on/after `fromIso` (start of the current week). */
+export async function countCompletedSince(orgId: string, fromIso: string) {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("tasks")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .is("deleted_at", null)
+    .gte("completed_at", fromIso);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** The current user's open assigned tasks, for the "My Tasks" widget (RLS-scoped). */
+export async function listMyOpenTasks(orgId: string, userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(
+      `id, number, title, due_date, progress, project_id,
+       status:workflow_statuses(name, color, category),
+       project:projects(name)`,
+    )
+    .eq("organization_id", orgId)
+    .eq("assignee_id", userId)
+    .is("deleted_at", null)
+    .is("completed_at", null)
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(60);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Open task load per member (assignee), for the Team Workload widget. */
+export async function listTeamWorkload(orgId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("assignee_id, assignee:profiles!tasks_assignee_id_fkey(full_name, avatar_url)")
+    .eq("organization_id", orgId)
+    .is("deleted_at", null)
+    .is("completed_at", null)
+    .not("assignee_id", "is", null);
+  if (error) throw error;
+  return data ?? [];
+}
