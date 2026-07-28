@@ -10,7 +10,7 @@ export default function AppearanceSettingsPage() {
       <CardHeader>
         <CardTitle className="text-base">Theme</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Choose how FlowDesk looks. System follows your device setting.
+          Choose how KerjaanKita looks. System follows your device setting.
         </p>
       </CardHeader>
       <CardContent>
