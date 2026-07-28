@@ -33,7 +33,7 @@ export function Brand({
     <div className={cn("flex items-center gap-2.5", className)}>
       <Logo className="h-8 w-8" />
       {showWordmark && (
-        <span className="text-lg font-semibold tracking-tight">FlowDesk</span>
+        <span className="text-lg font-semibold tracking-tight">KerjaanKita</span>
       )}
     </div>
   );
