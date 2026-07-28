@@ -15,7 +15,7 @@ export type Stat = {
 
 export function StatCard({ label, value, icon: Icon, hint, href, tone }: Stat) {
   const inner = (
-    <CardContent className="flex items-start gap-3 pt-6">
+    <CardContent className="flex h-full items-center gap-3 p-5">
       <div
         className={cn(
           "flex size-9 shrink-0 items-center justify-center rounded-lg",
@@ -34,12 +34,12 @@ export function StatCard({ label, value, icon: Icon, hint, href, tone }: Stat) {
 
   if (href) {
     return (
-      <Card className="transition-colors hover:border-primary/40">
-        <Link href={href} className="block outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Card className="h-full transition-colors hover:border-primary/40">
+        <Link href={href} className="block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {inner}
         </Link>
       </Card>
     );
   }
-  return <Card>{inner}</Card>;
+  return <Card className="h-full">{inner}</Card>;
 }
