@@ -3,11 +3,10 @@ import { requireOrgContext } from "@/lib/auth";
 import { PERMISSIONS } from "@/constants";
 import { loadProject } from "@/features/projects/loaders";
 import { checkPermission } from "@/repositories/permission.repository";
-import { listTasks } from "@/repositories/task.repository";
+import { getBoardData } from "@/repositories/task.repository";
 import { getDefaultTaskWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
 import { KanbanBoard } from "@/features/tasks/components/kanban-board";
 import { TaskDrawerLoader } from "@/features/tasks/components/task-drawer-loader";
-import type { BoardTask } from "@/features/tasks/queries";
 
 export default async function ProjectBoardPage({
   params,
@@ -25,27 +24,12 @@ export default async function ProjectBoardPage({
   if (!project) notFound();
 
   const workflowId = await getDefaultTaskWorkflowId(orgId);
-  const [statuses, rows, canAny, canOwn] = await Promise.all([
+  const [statuses, initialTasks, canAny, canOwn] = await Promise.all([
     workflowId ? getWorkflowStatuses(workflowId) : Promise.resolve([]),
-    listTasks(id),
+    getBoardData(id),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_ANY, { projectId: id }),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_OWN, { projectId: id }),
   ]);
-
-  const initialTasks: BoardTask[] = rows.map((r) => ({
-    id: r.id,
-    number: r.number,
-    title: r.title,
-    status_id: r.status_id,
-    priority: r.priority,
-    assignee_id: r.assignee_id,
-    assignee_name: r.assignee?.full_name ?? null,
-    assignee_avatar: r.assignee?.avatar_url ?? null,
-    due_date: r.due_date,
-    progress: r.progress,
-    is_blocked: r.is_blocked,
-    position: r.position ?? 0,
-  }));
 
   return (
     <>
