@@ -1,17 +1,32 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
-/** Statuses for a specific workflow (drives the status select). */
+/** Statuses for a specific workflow (drives the status select and the board). */
 export async function getWorkflowStatuses(workflowId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("workflow_statuses")
-    .select("id, name, color, category, position, is_initial, is_final")
+    .select("id, name, color, category, position, is_initial, is_final, auto_progress")
     .eq("workflow_id", workflowId)
     .is("deleted_at", null)
     .order("position");
   if (error) throw error;
   return data;
+}
+
+/**
+ * The task workflow a project's board uses — its own per-project workflow, or
+ * the org default task workflow as a fallback for any not-yet-provisioned project.
+ */
+export async function getProjectWorkflowId(projectId: string, orgId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("workflow_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (data?.workflow_id) return data.workflow_id;
+  return getDefaultTaskWorkflowId(orgId);
 }
 
 export type WorkflowStatus = Awaited<ReturnType<typeof getWorkflowStatuses>>[number];

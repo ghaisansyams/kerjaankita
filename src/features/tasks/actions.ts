@@ -76,9 +76,12 @@ export async function createTask(
       start_date: d.startDate ?? null,
       due_date: d.dueDate ?? null,
       estimated_hours: d.estimatedHours ?? null,
+      // When created from a specific board column, land there; otherwise the
+      // trigger picks the workflow's initial status.
+      status_id: d.statusId ?? null,
     };
-    // number, workflow, initial status, org, activity + assignment notification
-    // are all set by triggers.
+    // number, workflow, initial status (when null), org, activity + assignment
+    // notification are all set by triggers.
     await taskRepo.insertTask(values);
     revalidateTasks(d.projectId);
     return actionOk({ id });

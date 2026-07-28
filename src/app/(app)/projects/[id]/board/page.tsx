@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@/constants";
 import { loadProject } from "@/features/projects/loaders";
 import { checkPermission } from "@/repositories/permission.repository";
 import { getBoardData } from "@/repositories/task.repository";
-import { getDefaultTaskWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
+import { getProjectWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
 import { KanbanBoard } from "@/features/tasks/components/kanban-board";
 
 export default async function ProjectBoardPage({
@@ -22,25 +22,32 @@ export default async function ProjectBoardPage({
   const project = await loadProject(id);
   if (!project) notFound();
 
-  const workflowId = await getDefaultTaskWorkflowId(orgId);
-  const [statuses, initialTasks, canAny, canOwn] = await Promise.all([
+  const workflowId = await getProjectWorkflowId(id, orgId);
+  const [statuses, initialTasks, canAny, canOwn, canManageWorkflow] = await Promise.all([
     workflowId ? getWorkflowStatuses(workflowId) : Promise.resolve([]),
     getBoardData(id),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_ANY, { projectId: id }),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_OWN, { projectId: id }),
+    checkPermission(orgId, PERMISSIONS.WORKFLOW_MANAGE, { projectId: id }),
   ]);
 
   return (
     <KanbanBoard
       projectId={id}
+      workflowId={workflowId ?? ""}
       currentUserId={ctx.profile.id}
       canAny={canAny}
       canOwn={canOwn}
+      canManageWorkflow={canManageWorkflow}
       statuses={statuses.map((s) => ({
         id: s.id,
         name: s.name,
         color: s.color,
         category: s.category,
+        position: s.position,
+        isInitial: s.is_initial,
+        isFinal: s.is_final,
+        weight: s.auto_progress ?? 0,
       }))}
       initialTasks={initialTasks}
       initialTaskId={openTaskId ?? null}
