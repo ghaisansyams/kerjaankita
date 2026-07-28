@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { format, isPast, isToday } from "date-fns";
@@ -135,18 +135,17 @@ export function KanbanCardBody({
 
 export function SortableKanbanCard({
   task,
-  projectId,
   draggable,
   editable,
+  onOpen,
   onSetProgress,
 }: {
   task: BoardTask;
-  projectId: string;
   draggable: boolean;
   editable: boolean;
+  onOpen: (taskId: string) => void;
   onSetProgress: (id: string, value: number) => Promise<boolean>;
 }) {
-  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { statusId: task.status_id },
@@ -157,37 +156,51 @@ export function SortableKanbanCard({
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
+  // The whole card is the drag handle; distinguish a click from a drag by the
+  // pointer travel between press and release (dnd-kit needs 6px to start a drag).
+  const downPos = useRef<{ x: number; y: number } | null>(null);
 
-  const open = () => router.push(`/projects/${projectId}/board?task=${task.id}`);
+  function handleClick(e: React.MouseEvent) {
+    const p = downPos.current;
+    if (p && (Math.abs(e.clientX - p.x) > 5 || Math.abs(e.clientY - p.y) > 5)) return;
+    onOpen(task.id);
+  }
 
   return (
     <li ref={setNodeRef} style={style} className="group relative list-none">
-      {/* Mouse: click anywhere opens; interactive controls stopPropagation. */}
+      {/* Whole card: draggable (grab + move) AND clickable (press-release opens). */}
       <div
-        onClick={open}
-        className="cursor-pointer rounded-xl outline-none transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 [&:hover>div]:shadow-md"
+        {...(draggable ? attributes : {})}
+        {...(draggable ? listeners : {})}
+        onPointerDownCapture={(e) => {
+          downPos.current = { x: e.clientX, y: e.clientY };
+        }}
+        onClick={handleClick}
+        aria-label={`Open task #${task.number}: ${task.title}`}
+        className={cn(
+          "touch-none rounded-xl outline-none transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring [&:hover>div]:shadow-md",
+          draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+        )}
       >
         <KanbanCardBody task={task} editable={editable} onSetProgress={onSetProgress} />
       </div>
 
-      {/* Keyboard open target (a11y) + hover drag handle */}
+      {/* Keyboard / screen-reader open target (mouse uses the card click above). */}
       <button
         type="button"
-        onClick={open}
+        onClick={() => onOpen(task.id)}
         aria-label={`Open task #${task.number}: ${task.title}`}
-        className="absolute -top-px left-0 h-0 w-0 overflow-hidden opacity-0 focus-visible:h-auto focus-visible:w-auto focus-visible:opacity-100"
+        className="absolute left-0 top-0 h-0 w-0 overflow-hidden opacity-0 focus-visible:h-auto focus-visible:w-auto focus-visible:opacity-100"
       />
+
+      {/* Non-interactive drag affordance (whole card is the handle). */}
       {draggable && (
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          aria-label={`Reorder task #${task.number}`}
-          className="absolute right-1 top-1.5 grid size-6 cursor-grab touch-none place-items-center rounded text-muted-foreground/40 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-1.5 top-1.5 text-muted-foreground/30 opacity-0 transition-opacity group-hover:opacity-100"
         >
           <GripVertical className="size-3.5" />
-        </button>
+        </span>
       )}
     </li>
   );

@@ -12,14 +12,14 @@ const CAP = 100;
 export function KanbanColumn({
   status,
   tasks,
-  projectId,
   canMove,
+  onOpen,
   onSetProgress,
 }: {
   status: BoardStatus;
   tasks: BoardTask[];
-  projectId: string;
   canMove: (t: BoardTask) => boolean;
+  onOpen: (taskId: string) => void;
   onSetProgress: (id: string, value: number) => Promise<boolean>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${status.id}`, data: { statusId: status.id } });
@@ -52,9 +52,9 @@ export function KanbanColumn({
               <SortableKanbanCard
                 key={t.id}
                 task={t}
-                projectId={projectId}
                 draggable={canMove(t)}
                 editable={canMove(t)}
+                onOpen={onOpen}
                 onSetProgress={onSetProgress}
               />
             ))}

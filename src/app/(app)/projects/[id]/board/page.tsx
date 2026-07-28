@@ -6,7 +6,6 @@ import { checkPermission } from "@/repositories/permission.repository";
 import { getBoardData } from "@/repositories/task.repository";
 import { getDefaultTaskWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
 import { KanbanBoard } from "@/features/tasks/components/kanban-board";
-import { TaskDrawerLoader } from "@/features/tasks/components/task-drawer-loader";
 
 export default async function ProjectBoardPage({
   params,
@@ -32,23 +31,19 @@ export default async function ProjectBoardPage({
   ]);
 
   return (
-    <>
-      <KanbanBoard
-        projectId={id}
-        currentUserId={ctx.profile.id}
-        canAny={canAny}
-        canOwn={canOwn}
-        statuses={statuses.map((s) => ({
-          id: s.id,
-          name: s.name,
-          color: s.color,
-          category: s.category,
-        }))}
-        initialTasks={initialTasks}
-      />
-      {openTaskId && (
-        <TaskDrawerLoader projectId={id} taskId={openTaskId} returnTo={`/projects/${id}/board`} />
-      )}
-    </>
+    <KanbanBoard
+      projectId={id}
+      currentUserId={ctx.profile.id}
+      canAny={canAny}
+      canOwn={canOwn}
+      statuses={statuses.map((s) => ({
+        id: s.id,
+        name: s.name,
+        color: s.color,
+        category: s.category,
+      }))}
+      initialTasks={initialTasks}
+      initialTaskId={openTaskId ?? null}
+    />
   );
 }

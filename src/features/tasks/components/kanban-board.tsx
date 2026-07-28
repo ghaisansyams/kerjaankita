@@ -19,6 +19,7 @@ import { moveTask, updateTaskProgress } from "../actions";
 import { fetchBoardTasks, type BoardTask } from "../queries";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCardBody } from "./kanban-card";
+import { BoardDrawerHost } from "./board-drawer-host";
 
 export type BoardStatus = {
   id: string;
@@ -34,6 +35,7 @@ export function KanbanBoard({
   currentUserId,
   canAny,
   canOwn,
+  initialTaskId = null,
 }: {
   projectId: string;
   statuses: BoardStatus[];
@@ -41,9 +43,12 @@ export function KanbanBoard({
   currentUserId: string;
   canAny: boolean;
   canOwn: boolean;
+  /** Task to open on load (deep link), opened in place — no navigation. */
+  initialTaskId?: string | null;
 }) {
   const [tasks, setTasks] = useState<BoardTask[]>(initialTasks);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId);
   const draggingRef = useRef(false);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
@@ -97,6 +102,27 @@ export function KanbanBoard({
     (t: BoardTask) => canAny || (canOwn && t.assignee_id === currentUserId),
     [canAny, canOwn, currentUserId],
   );
+
+  // Open/close the drawer in place. The URL is kept in sync via the History API
+  // (deep-linkable, refreshable) without a Next navigation — so the board never
+  // re-fetches and the app loading fallback never fires.
+  const openTask = useCallback((taskId: string) => {
+    setOpenTaskId(taskId);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("task", taskId);
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
+  const closeTask = useCallback(() => {
+    setOpenTaskId(null);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("task");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
 
   // Inline progress update from a card — optimistic, guarded, reconciled.
   const setProgress = useCallback(
@@ -222,9 +248,9 @@ export function KanbanBoard({
           <KanbanColumn
             key={s.id}
             status={s}
-            projectId={projectId}
             tasks={columns.byStatus.get(s.id) ?? []}
             canMove={canMove}
+            onOpen={openTask}
             onSetProgress={setProgress}
           />
         ))}
@@ -241,6 +267,8 @@ export function KanbanBoard({
           </div>
         )}
       </DragOverlay>
+
+      <BoardDrawerHost projectId={projectId} taskId={openTaskId} onClose={closeTask} />
     </DndContext>
   );
 }
