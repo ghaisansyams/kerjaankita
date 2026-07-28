@@ -19,6 +19,26 @@ import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
 import type { TablesInsert, TablesUpdate } from "@/types/database.types";
+import { buildTaskDrawerData } from "./task-drawer-data";
+import type { TaskDrawerData } from "./components/task-drawer";
+
+/**
+ * Read action: loads the full task-drawer bundle so the board can open the
+ * drawer in place without a route navigation (no board re-fetch, no loading
+ * fallback). Authorization mirrors the server loader (RLS + permission checks).
+ */
+export async function loadTaskDrawer(
+  projectId: string,
+  taskId: string,
+): Promise<ActionResult<TaskDrawerData>> {
+  try {
+    const data = await buildTaskDrawerData(projectId, taskId);
+    if (!data) return actionError("NOT_FOUND", "This task is no longer available.");
+    return actionOk(data);
+  } catch (e) {
+    return mapUnknownError(e);
+  }
+}
 
 function revalidateTasks(projectId: string) {
   revalidatePath(`/projects/${projectId}/tasks`);

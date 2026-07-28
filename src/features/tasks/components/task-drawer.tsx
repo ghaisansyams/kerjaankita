@@ -77,6 +77,27 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Everything the drawer needs, minus how it closes. Shared by the server
+ *  loader (Tasks tab) and the in-place board drawer, and by the read action. */
+export type TaskDrawerData = {
+  projectId: string;
+  task: TaskDetailVM;
+  statuses: StatusOption[];
+  checklist: ChecklistItemVM[];
+  members: MemberOption[];
+  canEditAll: boolean;
+  canQuickEdit: boolean;
+  canDelete: boolean;
+  attachments: AttachmentVM[];
+  comments: CommentVM[];
+  activities: ActivityVM[];
+  currentUserId: string;
+  canComment: boolean;
+  canModerate: boolean;
+  canUpload: boolean;
+  canManageFiles: boolean;
+};
+
 export function TaskDrawer({
   projectId,
   task,
@@ -95,25 +116,12 @@ export function TaskDrawer({
   canUpload,
   canManageFiles,
   closeHref,
-}: {
-  projectId: string;
-  task: TaskDetailVM;
-  statuses: StatusOption[];
-  checklist: ChecklistItemVM[];
-  members: MemberOption[];
-  canEditAll: boolean;
-  canQuickEdit: boolean;
-  canDelete: boolean;
-  attachments: AttachmentVM[];
-  comments: CommentVM[];
-  activities: ActivityVM[];
-  currentUserId: string;
-  canComment: boolean;
-  canModerate: boolean;
-  canUpload: boolean;
-  canManageFiles: boolean;
-  /** Where to navigate when the drawer closes (Tasks tab vs Board tab). */
-  closeHref: string;
+  onClose,
+}: TaskDrawerData & {
+  /** Navigate here on close (URL-driven usage, e.g. the Tasks tab). */
+  closeHref?: string;
+  /** Close in place without navigating (board drawer). Wins over closeHref. */
+  onClose?: () => void;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -121,7 +129,8 @@ export function TaskDrawer({
   const [pending, startTransition] = useTransition();
 
   function close() {
-    router.push(closeHref);
+    if (onClose) onClose();
+    else if (closeHref) router.push(closeHref);
   }
 
   function onDelete() {
