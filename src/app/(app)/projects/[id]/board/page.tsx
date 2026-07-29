@@ -23,12 +23,13 @@ export default async function ProjectBoardPage({
   if (!project) notFound();
 
   const workflowId = await getProjectWorkflowId(id, orgId);
-  const [statuses, initialTasks, canAny, canOwn, canManageWorkflow] = await Promise.all([
+  const [statuses, initialTasks, canAny, canOwn, canManageWorkflow, canCreate] = await Promise.all([
     workflowId ? getWorkflowStatuses(workflowId) : Promise.resolve([]),
     getBoardData(id),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_ANY, { projectId: id }),
     checkPermission(orgId, PERMISSIONS.TASK_UPDATE_OWN, { projectId: id }),
     checkPermission(orgId, PERMISSIONS.WORKFLOW_MANAGE, { projectId: id }),
+    checkPermission(orgId, PERMISSIONS.TASK_CREATE, { projectId: id }),
   ]);
 
   return (
@@ -39,6 +40,7 @@ export default async function ProjectBoardPage({
       canAny={canAny}
       canOwn={canOwn}
       canManageWorkflow={canManageWorkflow}
+      canCreate={canCreate}
       statuses={statuses.map((s) => ({
         id: s.id,
         name: s.name,

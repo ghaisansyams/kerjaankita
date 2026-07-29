@@ -36,6 +36,7 @@ import { KanbanColumn, type ColumnHandlers } from "./kanban-column";
 import { KanbanCardBody } from "./kanban-card";
 import { BoardDrawerHost } from "./board-drawer-host";
 import { AddColumn } from "./add-column";
+import { ImportTasksDialog } from "@/features/import/components/import-tasks-dialog";
 import { DeleteColumnDialog, type DeleteTarget } from "./delete-column-dialog";
 
 export type BoardStatus = {
@@ -58,6 +59,7 @@ export function KanbanBoard({
   canAny,
   canOwn,
   canManageWorkflow,
+  canCreate,
   initialTaskId = null,
 }: {
   projectId: string;
@@ -68,6 +70,7 @@ export function KanbanBoard({
   canAny: boolean;
   canOwn: boolean;
   canManageWorkflow: boolean;
+  canCreate: boolean;
   initialTaskId?: string | null;
 }) {
   const router = useRouter();
@@ -357,14 +360,24 @@ export function KanbanBoard({
   }
 
   return (
-    <DndContext
-      id="flowdesk-board"
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragCancel={onDragCancel}
-    >
+    <div className="space-y-3">
+      {canCreate && cols.length > 0 && (
+        <div className="flex justify-end">
+          <ImportTasksDialog
+            projectId={projectId}
+            statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+            onDone={refetch}
+          />
+        </div>
+      )}
+      <DndContext
+        id="flowdesk-board"
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
+      >
       <div className="flex items-start gap-3 overflow-x-auto pb-2">
         <SortableContext items={cols.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
           {cols.map((s) => (
@@ -415,6 +428,7 @@ export function KanbanBoard({
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
       />
-    </DndContext>
+      </DndContext>
+    </div>
   );
 }

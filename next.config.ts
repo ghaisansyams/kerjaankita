@@ -18,6 +18,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   poweredByHeader: false,
+  // Heavy Node parsers used only in server actions (document import). Keep them
+  // external so they load from node_modules at runtime instead of being bundled.
+  serverExternalPackages: ["mammoth", "unpdf"],
   images: {
     // Public avatar/branding buckets are served from the Supabase project host.
     remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
