@@ -1,21 +1,28 @@
 import type { Metadata } from "next";
-import { requirePermission } from "@/lib/auth";
+import { requireOrgContext, requirePermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/constants";
+import { checkPermission } from "@/repositories/permission.repository";
+import { listClientAccounts } from "@/repositories/account.repository";
 import { PageHeader } from "@/components/page-header";
-import { ComingSoon } from "@/components/coming-soon";
+import { ClientsManager } from "@/features/clients/components/clients-manager";
 
 export const metadata: Metadata = { title: "Clients" };
 
 export default async function ClientsPage() {
   await requirePermission(PERMISSIONS.ACCOUNT_MANAGE);
+  const ctx = await requireOrgContext();
+  const [accounts, canInvite] = await Promise.all([
+    listClientAccounts(ctx.organization.id),
+    checkPermission(ctx.organization.id, PERMISSIONS.ORG_MEMBER_MANAGE),
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Clients"
-        description="Client organizations, contacts, and their portal access."
+        description="Client organizations and their read-only portal access."
       />
-      <ComingSoon title="Clients" />
+      <ClientsManager accounts={accounts} canInvite={canInvite} />
     </div>
   );
 }
