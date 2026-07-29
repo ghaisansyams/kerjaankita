@@ -7,6 +7,7 @@ import {
   PieChart,
   Bell,
   Building2,
+  FileText,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -43,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
       { title: "Projects", href: "/projects", icon: FolderKanban },
+      { title: "MOM", href: "/mom", icon: FileText, internalOnly: true },
       { title: "Timeline", href: "/timeline", icon: GanttChart, internalOnly: true },
       { title: "Calendar", href: "/calendar", icon: CalendarDays, internalOnly: true },
       { title: "Notifications", href: "/notifications", icon: Bell },
