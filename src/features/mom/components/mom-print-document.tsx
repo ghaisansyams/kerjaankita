@@ -19,8 +19,8 @@ const CSS = `
   .mom-doc * { box-sizing: border-box; }
   .mom-doc table.frame { width: 100%; border-collapse: collapse; }
   .mom-doc table.frame > tbody > tr > td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
-  .mom-doc .logo-cell { text-align: center; padding: 14px; }
-  .mom-doc .logo-cell img { max-height: 46px; max-width: 220px; }
+  .mom-doc .logo-cell { text-align: center; padding: 12px; }
+  .mom-doc .logo-cell img { max-height: 58px; max-width: 260px; object-fit: contain; }
   .mom-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
   .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 50%; vertical-align: middle; }
   .mom-doc .meta td.k { padding: 0; white-space: nowrap; }
@@ -55,9 +55,10 @@ export function MomPrintDocument({
   orgName: string;
   logoUrl: string | null;
 }) {
-  const logo = logoUrl || "/mom/logo.svg";
+  const logo = logoUrl || "/mom/logo.png";
   const showSignature = /galih/i.test(mom.approvedByName);
-  const placeDate = [mom.location, idLongDate(mom.meetingDate)].filter(Boolean).join(", ");
+  // Company signs at its HQ city; date follows the meeting (never "today").
+  const placeDate = `Depok, ${idLongDate(mom.meetingDate)}`;
 
   return (
     <div className="mom-doc">
@@ -132,7 +133,7 @@ export function MomPrintDocument({
             <td className="right">
               <div className="place">{placeDate}</div>
               <div className="lbl">Disiapkan dan Disetujui oleh:</div>
-              {showSignature ? <img src="/mom/signature.svg" alt="Signature" /> : <div className="sig-gap" />}
+              {showSignature ? <img src="/mom/signature.png" alt="Signature" /> : <div className="sig-gap" />}
               <div className="who">{mom.approvedByName}</div>
               {mom.approvedByRole ? <div className="role">{mom.approvedByRole}</div> : null}
             </td>
