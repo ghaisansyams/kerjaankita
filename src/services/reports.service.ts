@@ -42,13 +42,6 @@ export type RProject = {
   workspaceName: string | null;
 };
 export type RMember = { id: string; name: string };
-export type RMilestone = {
-  id: string;
-  name: string;
-  dueDate: string | null;
-  achievedAt: string | null;
-  projectId: string;
-};
 
 function inRange(value: string | null, r: DateRange): boolean {
   if (!value) return false;
@@ -226,40 +219,3 @@ export function buildWorkload(members: RMember[], tasks: RTask[]): ReportVM {
   };
 }
 
-export function buildMilestoneCompletion(
-  projects: RProject[],
-  milestones: RMilestone[],
-  range: DateRange,
-  today: Date,
-): ReportVM {
-  const todayIso = today.toISOString().slice(0, 10);
-  const scoped = milestones.filter((m) => (!range.from && !range.to ? true : inRange(m.dueDate, range)));
-  const rows = projects
-    .filter((p) => !p.isArchived)
-    .map((p) => {
-      const own = scoped.filter((m) => m.projectId === p.id);
-      const achieved = own.filter((m) => m.achievedAt);
-      const overdue = own.filter((m) => !m.achievedAt && m.dueDate && m.dueDate < todayIso);
-      return {
-        project: p.name,
-        total: own.length,
-        achieved: achieved.length,
-        overdue: overdue.length,
-        completion: pct(achieved.length, own.length),
-      };
-    })
-    .filter((r) => (r.total as number) > 0);
-  return {
-    key: "milestone-completion",
-    title: "Milestone Completion",
-    description: "Milestones achieved vs overdue, per project.",
-    columns: [
-      { key: "project", label: "Project" },
-      { key: "total", label: "Total", numeric: true },
-      { key: "achieved", label: "Achieved", numeric: true },
-      { key: "overdue", label: "Overdue", numeric: true },
-      { key: "completion", label: "Completion %", numeric: true },
-    ],
-    rows,
-  };
-}

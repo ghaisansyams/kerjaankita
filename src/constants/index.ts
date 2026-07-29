@@ -34,7 +34,6 @@ export const PERMISSIONS = {
   PROJECT_DELETE: "project.delete",
   PROJECT_MEMBER_MANAGE: "project.member.manage",
   PROJECT_VIEW_ALL: "project.view.all",
-  MILESTONE_MANAGE: "milestone.manage",
 
   TASK_CREATE: "task.create",
   TASK_UPDATE_ANY: "task.update.any",

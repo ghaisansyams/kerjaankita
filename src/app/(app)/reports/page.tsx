@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/constants";
-import {
-  reportMilestones,
-  reportProjects,
-  reportTasks,
-} from "@/repositories/report.repository";
+import { reportProjects, reportTasks } from "@/repositories/report.repository";
 import { listOrgMemberProfiles } from "@/repositories/member.repository";
 import { listWorkspaces } from "@/repositories/workspace.repository";
 import { listProjects } from "@/repositories/project.repository";
 import { loadHealthTolerance } from "@/features/projects/loaders";
 import {
   buildMemberProductivity,
-  buildMilestoneCompletion,
   buildOverdue,
   buildProjectProgress,
   buildTaskCompletion,
@@ -37,11 +32,10 @@ export default async function ReportsPage({
   const range = { from, to };
   const today = new Date();
 
-  const [projects, tasks, milestones, members, workspaces, allProjects, tolerance] =
+  const [projects, tasks, members, workspaces, allProjects, tolerance] =
     await Promise.all([
       reportProjects(orgId, scope),
       reportTasks(orgId, scope),
-      reportMilestones(orgId, scope),
       listOrgMemberProfiles(orgId),
       listWorkspaces(orgId),
       listProjects(orgId),
@@ -70,13 +64,6 @@ export default async function ReportsPage({
     projectName: t.project?.name ?? "Project",
     category: t.status?.category ?? null,
   }));
-  const rMilestones = milestones.map((m) => ({
-    id: m.id,
-    name: m.name,
-    dueDate: m.due_date,
-    achievedAt: m.achieved_at,
-    projectId: m.project_id,
-  }));
   const rMembers = members.map((m) => ({ id: m.id, name: m.full_name ?? m.email ?? "Member" }));
 
   const reports: ReportVM[] = [
@@ -85,7 +72,6 @@ export default async function ReportsPage({
     buildTaskCompletion(rProjects, rTasks, range),
     buildOverdue(rTasks, range, today),
     buildWorkload(rMembers, rTasks),
-    buildMilestoneCompletion(rProjects, rMilestones, range, today),
   ];
 
   return (

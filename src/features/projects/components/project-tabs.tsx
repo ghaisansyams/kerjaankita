@@ -12,7 +12,6 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { label: "Board", href: `${base}/board` },
     { label: "Tasks", href: `${base}/tasks` },
     { label: "Members", href: `${base}/members` },
-    { label: "Milestones", href: `${base}/milestones` },
     { label: "MOM", href: `${base}/mom` },
   ];
 

@@ -16,13 +16,11 @@ import {
   listTeamWorkload,
 } from "@/repositories/dashboard.repository";
 import { listRecentActivities } from "@/repositories/activity.repository";
-import { listUpcomingMilestones } from "@/repositories/schedule.repository";
 import { summarizeProjects } from "@/services/dashboard.service";
 import { StatCard, type Stat } from "@/features/dashboard/components/stat-card";
 import { QuickCreate } from "@/features/dashboard/components/quick-create";
 import { MyTasks, type MyTaskVM } from "@/features/dashboard/components/my-tasks";
 import { ActivityFeed } from "@/features/dashboard/components/activity-feed";
-import { UpcomingMilestones } from "@/features/dashboard/components/upcoming-milestones";
 import { BarChart, DonutChart } from "@/features/analytics/components/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -38,7 +36,7 @@ export default async function DashboardPage() {
   const weekEndIso = format(endOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekStartIso = startOfWeek(today, { weekStartsOn: 1 }).toISOString();
 
-  const [projectRows, dueCounts, completedWeek, myTasks, workload, activities, milestones, tolerance] =
+  const [projectRows, dueCounts, completedWeek, myTasks, workload, activities, tolerance] =
     await Promise.all([
       listProjectHealthRows(orgId),
       getTaskDueCounts(orgId, todayIso, weekEndIso),
@@ -46,7 +44,6 @@ export default async function DashboardPage() {
       listMyOpenTasks(orgId, ctx.profile.id),
       listTeamWorkload(orgId),
       listRecentActivities(orgId, 8),
-      listUpcomingMilestones(orgId, todayIso, 5),
       loadHealthTolerance(orgId),
     ]);
 
@@ -133,7 +130,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         <ActivityFeed
           items={activities.map((a) => ({
             id: a.id,
@@ -144,16 +141,6 @@ export default async function DashboardPage() {
             actorName: a.actor?.full_name ?? null,
             actorAvatar: a.actor?.avatar_url ?? null,
             createdAt: a.created_at,
-          }))}
-        />
-        <UpcomingMilestones
-          items={milestones.map((m) => ({
-            id: m.id,
-            name: m.name,
-            dueDate: m.due_date,
-            projectId: m.project_id,
-            projectName: m.project?.name ?? "Project",
-            projectColor: m.project?.color ?? null,
           }))}
         />
       </div>

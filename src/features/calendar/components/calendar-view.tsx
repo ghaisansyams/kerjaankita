@@ -27,12 +27,11 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { rescheduleTaskDue } from "@/features/tasks/actions";
-import { updateMilestone } from "@/features/milestones/actions";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -44,7 +43,7 @@ import {
 
 export type CalendarEvent = {
   id: string;
-  kind: "task" | "milestone";
+  kind: "task";
   title: string;
   date: string; // yyyy-mm-dd
   projectId: string;
@@ -84,7 +83,7 @@ export function CalendarView({
 
   useEffect(() => setEvents(initialEvents), [initialEvents]);
 
-  // Realtime: reconcile from the server when tasks/milestones change anywhere.
+  // Realtime: reconcile from the server when tasks change anywhere.
   useEffect(() => {
     const supabase = createClient();
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -95,7 +94,6 @@ export function CalendarView({
     const channel = supabase
       .channel("calendar")
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, bump)
-      .on("postgres_changes", { event: "*", schema: "public", table: "milestones" }, bump)
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);
@@ -111,7 +109,7 @@ export function CalendarView({
         (e) =>
           (ws === ALL || e.workspaceId === ws) &&
           (proj === ALL || e.projectId === proj) &&
-          (assignee === ALL || e.kind === "milestone" || e.assigneeId === assignee),
+          (assignee === ALL || e.assigneeId === assignee),
       ),
     [events, ws, proj, assignee],
   );
@@ -132,10 +130,7 @@ export function CalendarView({
       if (ev.date === newDate) return;
       const snapshot = events;
       setEvents((es) => es.map((e) => (e.id === ev.id ? { ...e, date: newDate } : e)));
-      const res =
-        ev.kind === "task"
-          ? await rescheduleTaskDue({ id: ev.id, dueDate: newDate })
-          : await updateMilestone({ id: ev.id, dueDate: newDate });
+      const res = await rescheduleTaskDue({ id: ev.id, dueDate: newDate });
       if (!res?.ok) {
         setEvents(snapshot);
         toast.error(res?.error.message ?? "You can't reschedule this.");
@@ -317,29 +312,21 @@ function Chip({ event, overlay }: { event: CalendarEvent; overlay?: boolean }) {
     id: event.id,
     disabled: overlay,
   });
-  const href =
-    event.kind === "task"
-      ? `/projects/${event.projectId}/tasks?task=${event.id}`
-      : `/projects/${event.projectId}/milestones`;
+  const href = `/projects/${event.projectId}/tasks?task=${event.id}`;
 
   const body = (
     <span className="flex min-w-0 items-center gap-1">
-      {event.kind === "milestone" ? (
-        <Flag className="size-3 shrink-0" />
-      ) : (
-        <span
-          aria-hidden
-          className="size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: event.projectColor ?? "#6366f1" }}
-        />
-      )}
+      <span
+        aria-hidden
+        className="size-2 shrink-0 rounded-full"
+        style={{ backgroundColor: event.projectColor ?? "#6366f1" }}
+      />
       <span className={cn("truncate", event.done && "line-through opacity-60")}>{event.title}</span>
     </span>
   );
 
   const classes = cn(
     "block cursor-grab touch-none rounded border bg-card px-1.5 py-0.5 text-[11px] shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    event.kind === "milestone" && "border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200",
     event.isBlocked && "border-rose-300 dark:border-rose-800",
     isDragging && "opacity-40",
     overlay && "w-44 shadow-lg",
@@ -392,22 +379,14 @@ function AgendaView({ events }: { events: CalendarEvent[] }) {
               {g.items.map((e) => (
                 <li key={e.id}>
                   <Link
-                    href={
-                      e.kind === "task"
-                        ? `/projects/${e.projectId}/tasks?task=${e.id}`
-                        : `/projects/${e.projectId}/milestones`
-                    }
+                    href={`/projects/${e.projectId}/tasks?task=${e.id}`}
                     className="flex items-center gap-2 text-sm hover:underline"
                   >
-                    {e.kind === "milestone" ? (
-                      <Flag className="size-3.5 text-indigo-500" />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="size-2 rounded-full"
-                        style={{ backgroundColor: e.projectColor ?? "#6366f1" }}
-                      />
-                    )}
+                    <span
+                      aria-hidden
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: e.projectColor ?? "#6366f1" }}
+                    />
                     <span className={cn("truncate", e.done && "line-through opacity-60")}>{e.title}</span>
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">{e.projectName}</span>
                   </Link>

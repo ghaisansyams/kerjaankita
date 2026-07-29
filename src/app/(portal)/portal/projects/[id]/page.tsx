@@ -3,7 +3,6 @@ import { requireOrgContext } from "@/lib/auth";
 import type { StatusCategory } from "@/constants";
 import { getProject } from "@/repositories/project.repository";
 import { listTasks } from "@/repositories/task.repository";
-import { listMilestones } from "@/repositories/milestone.repository";
 import { listProjectAttachments } from "@/repositories/attachment.repository";
 import { listProjectActivities } from "@/repositories/activity.repository";
 import { loadHealthTolerance } from "@/features/projects/loaders";
@@ -25,9 +24,8 @@ export default async function PortalProjectPage({
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [tasks, milestones, attachments, activities, tolerance] = await Promise.all([
+  const [tasks, attachments, activities, tolerance] = await Promise.all([
     listTasks(id),
-    listMilestones(id),
     listProjectAttachments(id),
     listProjectActivities(id, 20),
     loadHealthTolerance(ctx.organization.id),
@@ -61,12 +59,6 @@ export default async function PortalProjectPage({
         assigneeName: t.assignee?.full_name ?? null,
         dueDate: t.due_date,
         isBlocked: t.is_blocked,
-      }))}
-      milestones={milestones.map((m) => ({
-        id: m.id,
-        name: m.name,
-        dueDate: m.due_date,
-        achieved: m.achieved_at != null,
       }))}
       files={attachments.map((a) => ({
         id: a.id,

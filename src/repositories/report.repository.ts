@@ -35,17 +35,3 @@ export async function reportTasks(orgId: string, scope: ReportScope = {}) {
   if (error) throw error;
   return data ?? [];
 }
-
-export async function reportMilestones(orgId: string, scope: ReportScope = {}) {
-  const supabase = await createClient();
-  let q = supabase
-    .from("milestones")
-    .select("id, name, due_date, achieved_at, project_id, project:projects!inner(workspace_id)")
-    .eq("organization_id", orgId)
-    .is("deleted_at", null);
-  if (scope.projectId) q = q.eq("project_id", scope.projectId);
-  if (scope.workspaceId) q = q.eq("project.workspace_id", scope.workspaceId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data ?? [];
-}

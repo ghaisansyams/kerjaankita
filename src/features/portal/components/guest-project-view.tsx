@@ -3,7 +3,7 @@
 import { useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Download, FileText, Flag } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDate, formatRelative, getInitials, toDate } from "@/utils/format";
@@ -27,7 +27,6 @@ type TaskVM = {
   dueDate: string | null;
   isBlocked: boolean;
 };
-type MilestoneVM = { id: string; name: string; dueDate: string | null; achieved: boolean };
 type FileVM = { id: string; taskId: string | null; fileName: string; fileSize: number | null; createdAt: string };
 type UpdateVM = {
   id: string;
@@ -64,14 +63,12 @@ function bytes(n: number | null) {
 export function GuestProjectView({
   project,
   tasks,
-  milestones,
   files,
   updates,
   openTaskId,
 }: {
   project: ProjectVM;
   tasks: TaskVM[];
-  milestones: MilestoneVM[];
   files: FileVM[];
   updates: UpdateVM[];
   openTaskId: string | null;
@@ -178,30 +175,6 @@ export function GuestProjectView({
         </div>
 
         <div className="space-y-6">
-          {/* Milestones */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Milestones</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {milestones.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">No milestones.</p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {milestones.map((m) => (
-                    <li key={m.id} className="flex items-center gap-2.5">
-                      <Flag className={cn("size-4 shrink-0", m.achieved ? "text-emerald-500" : "text-indigo-500")} />
-                      <span className={cn("min-w-0 flex-1 truncate text-sm", m.achieved && "text-muted-foreground line-through")}>
-                        {m.name}
-                      </span>
-                      {m.dueDate && <span className="shrink-0 text-xs text-muted-foreground">{formatDate(m.dueDate, "MMM d")}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Shared files */}
           <Card>
             <CardHeader>
