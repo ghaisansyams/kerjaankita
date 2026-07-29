@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 80" role="img" aria-label="Signature">
+  <g fill="none" stroke="#111111" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 60 C 28 30, 44 16, 45 42 C 46 60, 35 60, 41 42 C 47 26, 60 20, 61 46 C 62 60, 52 62, 59 44 C 68 22, 90 20, 80 54 C 75 68, 100 42, 120 46"/>
+    <path d="M50 30 C 72 34, 96 32, 122 27"/>
+    <path d="M104 54 c 7 9, 17 6, 19 -5"/>
+    <path d="M126 50 q 6 8 12 2" stroke-width="2.6"/>
+  </g>
+</svg>

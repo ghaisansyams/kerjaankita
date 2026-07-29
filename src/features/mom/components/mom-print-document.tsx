@@ -1,42 +1,47 @@
-import { formatDate } from "@/utils/format";
 import type { MomDetail } from "@/repositories/mom.repository";
 
-const CATEGORY_LABEL: Record<string, string> = {
-  discussion: "Discussion",
-  decision: "Decision",
-  action_item: "Action Item",
-  next_step: "Next Step",
-};
+const ID_MONTHS = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+function idLongDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${Number(d)} ${ID_MONTHS[Number(m) - 1]} ${y}`;
+}
+function ddmmyyyy(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${d}-${m}-${y}`;
+}
 
 const CSS = `
-  @page { size: A4; margin: 18mm 16mm; }
-  .mom-doc { background: #fff; color: #111; font-family: Arial, Helvetica, "Segoe UI", sans-serif; max-width: 800px; margin: 0 auto; padding: 28px; line-height: 1.5; }
+  @page { size: A4; margin: 16mm; }
+  .mom-doc { background:#fff; color:#000; font-family: Arial, Helvetica, "Segoe UI", sans-serif; max-width: 780px; margin: 0 auto; padding: 18px; font-size: 12px; line-height: 1.45; }
   .mom-doc * { box-sizing: border-box; }
-  .mom-doc .head { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 12px; gap: 16px; }
-  .mom-doc .brand { display: flex; align-items: center; gap: 10px; }
-  .mom-doc .brand img { max-height: 40px; max-width: 160px; }
-  .mom-doc .brand .name { font-size: 15px; font-weight: 700; letter-spacing: .02em; }
-  .mom-doc .doctitle { text-align: right; }
-  .mom-doc .doctitle h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-  .mom-doc .doctitle p { margin: 2px 0 0; font-size: 11px; color: #555; }
-  .mom-doc h2 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #333; margin: 22px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-  .mom-doc .meta { width: 100%; border-collapse: collapse; margin-top: 14px; }
-  .mom-doc .meta td { padding: 4px 8px; font-size: 12.5px; vertical-align: top; }
-  .mom-doc .meta td.k { width: 90px; color: #555; }
-  .mom-doc table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  .mom-doc table.grid th, .mom-doc table.grid td { border: 1px solid #bbb; padding: 6px 8px; text-align: left; }
-  .mom-doc table.grid th { background: #f2f2f2; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
-  .mom-doc .dist { font-size: 12.5px; }
-  .mom-doc ol.notes { margin: 0; padding-left: 22px; }
-  .mom-doc ol.notes li { margin-bottom: 10px; font-size: 12.5px; }
-  .mom-doc ol.notes .cat { font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; color: #444; margin-right: 6px; }
+  .mom-doc table.frame { width: 100%; border-collapse: collapse; }
+  .mom-doc table.frame > tbody > tr > td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
+  .mom-doc .logo-cell { text-align: center; padding: 14px; }
+  .mom-doc .logo-cell img { max-height: 46px; max-width: 220px; }
+  .mom-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
+  .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 50%; vertical-align: middle; }
+  .mom-doc .meta td.k { padding: 0; white-space: nowrap; }
+  .mom-doc .meta { border-collapse: collapse; }
+  .mom-doc .meta td { border: none !important; padding: 1px 0; }
+  .mom-doc .sec-h { font-weight: 700; margin-bottom: 4px; }
+  .mom-doc ol.know { margin: 0; padding-left: 20px; }
+  .mom-doc ol.know li { margin-bottom: 4px; }
+  .mom-doc .dist p { margin: 0 0 2px; }
+  .mom-doc ol.notes { margin: 4px 0 0; padding-left: 22px; }
+  .mom-doc ol.notes li { margin-bottom: 7px; text-align: justify; }
   .mom-doc .content { white-space: pre-wrap; }
-  .mom-doc .sign { display: flex; justify-content: space-between; gap: 40px; margin-top: 40px; }
-  .mom-doc .sign .col { flex: 1; font-size: 12.5px; }
-  .mom-doc .sign .place { color: #555; margin-bottom: 48px; }
-  .mom-doc .sign .line { border-top: 1px solid #111; padding-top: 4px; }
-  .mom-doc .sign .role { color: #555; font-size: 11.5px; }
-  .no-print { text-align: center; padding: 10px; }
+  .mom-doc .sign td { border: 1px solid #000; }
+  .mom-doc .sign .right { text-align: left; }
+  .mom-doc .sign .place { margin-bottom: 2px; font-weight: 700; }
+  .mom-doc .sign .lbl { margin-bottom: 4px; }
+  .mom-doc .sign img { height: 60px; display: block; margin: 2px 0; }
+  .mom-doc .sign .who { font-weight: 700; }
+  .mom-doc .sign .role { }
+  .mom-doc .sig-gap { height: 64px; }
+  .no-print { text-align: center; padding: 12px; }
   .no-print button { font-family: inherit; font-size: 13px; padding: 8px 16px; border: 1px solid #111; background: #111; color: #fff; border-radius: 6px; cursor: pointer; }
   @media print { .no-print { display: none !important; } body { background: #fff; } .mom-doc { padding: 0; } }
 `;
@@ -50,72 +55,90 @@ export function MomPrintDocument({
   orgName: string;
   logoUrl: string | null;
 }) {
-  const placeLine = [mom.location, formatDate(mom.meetingDate)].filter(Boolean).join(", ");
+  const logo = logoUrl || "/mom/logo.svg";
+  const showSignature = /galih/i.test(mom.approvedByName);
+  const placeDate = [mom.location, idLongDate(mom.meetingDate)].filter(Boolean).join(", ");
+
   return (
     <div className="mom-doc">
       <style>{CSS}</style>
 
-      <div className="head">
-        <div className="brand">
-          {logoUrl ? <img src={logoUrl} alt={orgName} /> : <span className="name">{orgName}</span>}
-        </div>
-        <div className="doctitle">
-          <h1>MOM (Minutes of Meeting)</h1>
-          <p>{mom.projectName}</p>
-        </div>
-      </div>
-
-      <table className="meta">
+      <table className="frame">
         <tbody>
-          <tr><td className="k">Title</td><td><strong>{mom.title}</strong></td></tr>
-          <tr><td className="k">Date</td><td>{formatDate(mom.meetingDate)}</td></tr>
-          <tr><td className="k">Time</td><td>{mom.meetingTime || "—"}</td></tr>
-          <tr><td className="k">Location</td><td>{mom.location || "—"}</td></tr>
-          <tr><td className="k">PIC</td><td>{mom.picName || "—"}</td></tr>
+          {/* Logo */}
+          <tr>
+            <td className="logo-cell" colSpan={2}>
+              {logo ? <img src={logo} alt={orgName} /> : <span className="txt">{orgName}</span>}
+            </td>
+          </tr>
+
+          {/* MOM | meeting info */}
+          <tr>
+            <td className="mom-title">MOM</td>
+            <td>
+              <table className="meta">
+                <tbody>
+                  <tr><td className="k">Tanggal</td><td>&nbsp;:&nbsp;{ddmmyyyy(mom.meetingDate)}</td></tr>
+                  <tr><td className="k">Tempat</td><td>&nbsp;:&nbsp;{mom.location || "-"}</td></tr>
+                  <tr><td className="k">Waktu</td><td>&nbsp;:&nbsp;{mom.meetingTime || "-"}</td></tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+
+          {/* Mengetahui | Distribusi */}
+          <tr>
+            <td>
+              <div className="sec-h">Mengetahui:</div>
+              {mom.participants.length === 0 ? (
+                <p>-</p>
+              ) : (
+                <ol className="know">
+                  {mom.participants.map((p) => (
+                    <li key={p.id}>
+                      {p.name}
+                      {p.role ? ` sebagai ${p.role}` : ""}
+                      {p.company ? ` (${p.company})` : ""}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </td>
+            <td className="dist">
+              <div className="sec-h">DISTRIBUSI MOM:</div>
+              {mom.distribution.length === 0 ? <p>-</p> : mom.distribution.map((d) => <p key={d.id}>{d.recipient}</p>)}
+            </td>
+          </tr>
+
+          {/* MOM notes */}
+          <tr>
+            <td colSpan={2}>
+              <div className="sec-h">MOM:</div>
+              {mom.notes.length === 0 ? (
+                <p>-</p>
+              ) : (
+                <ol className="notes">
+                  {mom.notes.map((n) => (
+                    <li key={n.id}><span className="content">{n.content}</span></li>
+                  ))}
+                </ol>
+              )}
+            </td>
+          </tr>
+
+          {/* Signature */}
+          <tr className="sign">
+            <td>&nbsp;</td>
+            <td className="right">
+              <div className="place">{placeDate}</div>
+              <div className="lbl">Disiapkan dan Disetujui oleh:</div>
+              {showSignature ? <img src="/mom/signature.svg" alt="Signature" /> : <div className="sig-gap" />}
+              <div className="who">{mom.approvedByName}</div>
+              {mom.approvedByRole ? <div className="role">{mom.approvedByRole}</div> : null}
+            </td>
+          </tr>
         </tbody>
       </table>
-
-      <h2>Participants</h2>
-      {mom.participants.length === 0 ? (
-        <p className="dist">—</p>
-      ) : (
-        <table className="grid">
-          <thead><tr><th style={{ width: "40%" }}>Name</th><th style={{ width: "30%" }}>Role</th><th>Company</th></tr></thead>
-          <tbody>
-            {mom.participants.map((p) => (
-              <tr key={p.id}><td>{p.name}</td><td>{p.role || "—"}</td><td>{p.company || "—"}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <h2>Distribution List</h2>
-      <p className="dist">{mom.distribution.length ? mom.distribution.map((d) => d.recipient).join(" · ") : "—"}</p>
-
-      <h2>Meeting Notes</h2>
-      {mom.notes.length === 0 ? (
-        <p className="dist">—</p>
-      ) : (
-        <ol className="notes">
-          {mom.notes.map((n) => (
-            <li key={n.id}>
-              <span className="cat">{CATEGORY_LABEL[n.category] ?? n.category}</span>
-              <span className="content">{n.content}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-
-      <div className="sign">
-        <div className="col">
-          <div className="place">Prepared by</div>
-          <div className="line"><strong>{mom.preparedByName ?? "—"}</strong></div>
-        </div>
-        <div className="col">
-          <div className="place">{placeLine}</div>
-          <div className="line"><strong>{mom.approvedByName}</strong><div className="role">{mom.approvedByRole}</div></div>
-        </div>
-      </div>
     </div>
   );
 }
