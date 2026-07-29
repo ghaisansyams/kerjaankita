@@ -27,11 +27,11 @@ const CSS = `
   .mom-doc .meta { border-collapse: collapse; }
   .mom-doc .meta td { border: none !important; padding: 1px 0; }
   .mom-doc .sec-h { font-weight: 700; margin-bottom: 4px; }
-  .mom-doc ol.know { margin: 0; padding-left: 20px; }
+  .mom-doc ol.know { margin: 0; padding-left: 20px; list-style: decimal outside; }
   .mom-doc ol.know li { margin-bottom: 4px; }
   .mom-doc .dist p { margin: 0 0 2px; }
-  .mom-doc ol.notes { margin: 4px 0 0; padding-left: 22px; }
-  .mom-doc ol.notes li { margin-bottom: 7px; text-align: justify; }
+  .mom-doc ol.notes { margin: 4px 0 0; padding-left: 24px; list-style: decimal outside; }
+  .mom-doc ol.notes li { margin-bottom: 7px; text-align: justify; padding-left: 4px; }
   .mom-doc .content { white-space: pre-wrap; }
   .mom-doc .sign td { border: 1px solid #000; }
   .mom-doc .sign .right { text-align: left; }
