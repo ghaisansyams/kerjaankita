@@ -165,34 +165,39 @@ export function ProjectForm({
               )}
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="workspaceId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Workspace</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a workspace" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {workspaces.map((w) => (
-                          <SelectItem key={w.id} value={w.id}>
-                            {w.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className={cn("grid gap-4", workspaces.length > 1 && "sm:grid-cols-2")}>
+              {/* Only surface the Workspace picker once there's a real choice to make.
+                  With a single (default "General") workspace it's just noise, so we hide
+                  it and submit the default workspaceId silently. */}
+              {workspaces.length > 1 && (
+                <FormField
+                  control={form.control}
+                  name="workspaceId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Workspace</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a workspace" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {workspaces.map((w) => (
+                            <SelectItem key={w.id} value={w.id}>
+                              {w.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
