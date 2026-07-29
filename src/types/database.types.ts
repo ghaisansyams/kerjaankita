@@ -3362,7 +3362,7 @@ export type Database = {
       automation_run_status: "success" | "failed" | "skipped";
       custom_field_type: "text" | "textarea" | "number" | "date" | "datetime" | "boolean" | "select" | "multi_select" | "user" | "url" | "email" | "currency";
       dependency_type: "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish";
-      entity_type: "organization" | "workspace" | "team" | "account" | "contact" | "project" | "milestone" | "task";
+      entity_type: "organization" | "workspace" | "team" | "account" | "contact" | "project" | "milestone" | "task" | "mom";
       invitation_status: "pending" | "accepted" | "revoked" | "expired";
       member_type: "member" | "guest";
       membership_status: "invited" | "active" | "suspended";

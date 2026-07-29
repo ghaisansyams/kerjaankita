@@ -49,6 +49,10 @@ export const PERMISSIONS = {
   ATTACHMENT_SHARE_GUEST: "attachment.share_guest",
 
   WORKFLOW_MANAGE: "workflow.manage",
+  MOM_CREATE: "mom.create",
+  MOM_UPDATE: "mom.update",
+  MOM_DELETE: "mom.delete",
+  MOM_EXPORT: "mom.export",
   CUSTOMFIELD_MANAGE: "customfield.manage",
   TEMPLATE_MANAGE: "template.manage",
   AUTOMATION_MANAGE: "automation.manage",
