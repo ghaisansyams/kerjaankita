@@ -6,6 +6,7 @@ import {
   BarChart3,
   PieChart,
   Bell,
+  Building2,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -32,10 +33,10 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-// NOTE: My Tasks, Files, Team and Clients are intentionally omitted — their
-// pages are placeholders in v1.0, so they are not linked from navigation to
-// avoid routing users to unfinished screens (QA RC1 · H1). The routes still
-// exist; they are simply not surfaced.
+// NOTE: My Tasks, Files and Team are intentionally omitted — their pages are
+// placeholders in v1.0, so they are not linked from navigation to avoid routing
+// users to unfinished screens (QA RC1 · H1). The routes still exist; they are
+// simply not surfaced. Clients is a real feature and IS surfaced (below).
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Workspace",
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Manage",
     items: [
+      { title: "Clients", href: "/clients", icon: Building2, permission: PERMISSIONS.ACCOUNT_MANAGE, internalOnly: true },
       { title: "Settings", href: "/settings", icon: Settings, permission: PERMISSIONS.ORG_SETTINGS_UPDATE },
     ],
   },
