@@ -69,7 +69,7 @@ export function MomDetail({
 
   function exportPdf() {
     if (canExport) logMomExport({ id: mom.id });
-    window.open(`/mom/${mom.id}/print`, "_blank", "noopener,noreferrer");
+    window.open(`/print/mom/${mom.id}`, "_blank", "noopener,noreferrer");
   }
 
   function openTaskDialog(noteId: string, content: string) {
