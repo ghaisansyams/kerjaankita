@@ -2,7 +2,7 @@
 
 import { useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format, isPast, isToday } from "date-fns";
+import { format } from "date-fns";
 import { Download, FileText, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -106,7 +106,7 @@ export function GuestProjectView({
             <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", PROJECT_HEALTH_BADGE[project.health])}>
               {PROJECT_HEALTH_LABELS[project.health]}
             </span>
-            {project.endDate && <span>· Due {formatDate(project.endDate)}</span>}
+            {project.endDate && <span>· Estimasi {formatDate(project.endDate)}</span>}
           </div>
           {project.description && (
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{project.description}</p>
@@ -120,18 +120,18 @@ export function GuestProjectView({
           {scheduled.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Schedule</CardTitle>
+                <CardTitle className="text-base">Estimasi jadwal</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
                   {scheduled.map((t) => {
                     const d = toDate(t.dueDate);
-                    const overdue = d ? isPast(d) && !isToday(d) && t.statusCategory !== "done" : false;
                     return (
                       <li key={t.id} className="flex items-center gap-3 text-sm">
                         <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: t.statusColor ?? "#94a3b8" }} />
                         <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                        <span className={cn("shrink-0 text-xs tabular-nums", overdue ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                        {/* Client view shows target dates as estimates — no hard "overdue" alarm. */}
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                           {d ? format(d, "MMM d") : ""}
                         </span>
                       </li>
@@ -289,7 +289,7 @@ export function GuestProjectView({
                     <dd>{openTask.assigneeName ?? "Unassigned"}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Due</dt>
+                    <dt className="text-xs text-muted-foreground">Estimasi</dt>
                     <dd>{formatDate(openTask.dueDate)}</dd>
                   </div>
                 </dl>
