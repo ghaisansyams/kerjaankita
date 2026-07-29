@@ -15,7 +15,7 @@ export default async function NewMomPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-6">
-      <PageHeader title="New meeting minutes" description="Write it once — FlowDesk stores it, links it to the project, and exports a PDF." />
+      <PageHeader title="New meeting minutes" description="Write it once — KerjaanKita stores it, links it to the project, and exports a PDF." />
       <MomForm mode="create" projects={options.projects} members={options.members} initial={{ projectId: project ?? "" }} />
     </div>
   );
