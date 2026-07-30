@@ -43,6 +43,13 @@ export class OpenAICompatibleProvider implements AiProvider {
   private get maxTokens(): number {
     return Number(process.env.OPENAI_COMPATIBLE_MAX_TOKENS || "4000") || 4000;
   }
+  /** How to force structured output. "tool" = function-calling (default); "json"
+   *  = JSON mode. Some endpoints (Groq + Llama) reject forced function-calls with
+   *  `tool_use_failed`, so JSON mode is the reliable path there. Either way we
+   *  auto-fall back to JSON mode if function-calling fails. */
+  private get structuredMode(): string {
+    return (process.env.OPENAI_COMPATIBLE_STRUCTURED_MODE || "tool").trim().toLowerCase();
+  }
 
   isConfigured(): boolean {
     return this.apiKey.trim().length > 0 && this.baseUrl.length > 0;
@@ -81,7 +88,8 @@ export class OpenAICompatibleProvider implements AiProvider {
     const canShrink = imageDataUrls.length === 0;
 
     let text = fullText;
-    for (let attempt = 0; ; attempt++) {
+    let jsonMode = this.structuredMode === "json";
+    for (let attempt = 0; attempt < 8; attempt++) {
       const userContent =
         imageDataUrls.length > 0
           ? [
@@ -90,15 +98,25 @@ export class OpenAICompatibleProvider implements AiProvider {
             ]
           : text;
 
-      const body = {
+      // JSON mode: describe the schema in the prompt and let the model return a
+      // plain JSON object. Function-calling: hand the schema as a forced tool.
+      const systemPrompt = jsonMode
+        ? `${req.systemPrompt}\n\nRespond with ONLY a single JSON object — no prose, no markdown fences — that conforms to this JSON Schema:\n${JSON.stringify(req.jsonSchema)}`
+        : req.systemPrompt;
+
+      const body: Record<string, unknown> = {
         model: this.model,
         temperature: 0.2,
         max_tokens: this.maxTokens,
         messages: [
-          { role: "system", content: req.systemPrompt },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        tools: [
+      };
+      if (jsonMode) {
+        body.response_format = { type: "json_object" };
+      } else {
+        body.tools = [
           {
             type: "function",
             function: {
@@ -107,9 +125,9 @@ export class OpenAICompatibleProvider implements AiProvider {
               parameters: req.jsonSchema,
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: req.toolName } },
-      };
+        ];
+        body.tool_choice = { type: "function", function: { name: req.toolName } };
+      }
 
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
@@ -127,18 +145,28 @@ export class OpenAICompatibleProvider implements AiProvider {
         const args = message?.tool_calls?.[0]?.function?.arguments;
         if (args) return JSON.parse(args);
         if (message?.content) return JSON.parse(extractJsonObject(message.content));
+        if (!jsonMode) {
+          jsonMode = true; // endpoint returned nothing usable via tools → try JSON mode
+          continue;
+        }
         throw new Error("The AI did not return structured output.");
       }
 
       const detail = await res.text().catch(() => "");
+      // Endpoint can't honour forced function-calling (e.g. Groq + Llama) → JSON mode.
+      if (!jsonMode && /tool_use_failed|failed to call a function|does not support tools|response_format/i.test(detail)) {
+        jsonMode = true;
+        continue;
+      }
+      // Free-tier per-minute token limit → drop the tail and retry smaller.
       const tooLarge = res.status === 413 || /too large|reduce your message|tokens per minute|rate_limit/i.test(detail);
-      if (tooLarge && canShrink && attempt < 3 && text.length > 6000) {
-        // Drop the tail; the model still gets the bulk of the document.
+      if (tooLarge && canShrink && text.length > 6000) {
         text = text.slice(0, Math.floor(text.length * 0.6));
         continue;
       }
       throw new Error(`AI request failed (${res.status}): ${detail}`.slice(0, 400));
     }
+    throw new Error("The AI could not process this document after several attempts.");
   }
 }
 

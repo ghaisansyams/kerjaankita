@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import * as plan from "@/repositories/import-planning.repository";
 import { getParser } from "@/services/import/parsers";
 import { getAiProvider, aiImportEnabled, registeredProviders } from "@/services/ai";
+import { getOpenAICompatibleUsage, type AiUsage } from "@/services/ai/usage";
 import { buildImportSystemPrompt, buildImportUserPrompt } from "@/services/import/prompt";
 import {
   AI_ANALYSIS_JSON_SCHEMA,
@@ -39,6 +40,16 @@ export async function aiImportStatus(): Promise<
 > {
   await requireOrgContext();
   return actionOk({ enabled: aiImportEnabled(), providers: registeredProviders() });
+}
+
+/** Live free-tier usage/quota for the OpenAI-compatible (Groq) provider. */
+export async function aiProviderUsage(): Promise<ActionResult<AiUsage>> {
+  await requireOrgContext();
+  const provider = (process.env.AI_PROVIDER || "").trim().toLowerCase();
+  if (provider && provider !== "openai-compatible") {
+    return actionOk({ configured: false, provider, model: "" });
+  }
+  return actionOk(await getOpenAICompatibleUsage());
 }
 
 /** Authorize the raw upload; returns a tenant-scoped temp storage path. */

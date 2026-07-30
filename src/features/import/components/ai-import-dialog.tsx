@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { FileUp, KeyRound, Loader2, Sparkles, Trash2, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { FileDropzone } from "@/components/file-dropzone";
+import { GroqUsagePanel } from "./groq-usage-panel";
 import {
   aiImportStatus,
   analyzeImportDocument,
@@ -221,13 +222,16 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
           )}
 
           {phase === "upload" && (
-            <FileDropzone accept={ACCEPT} onFile={onFile}>
-              <FileUp className="mb-3 size-8 text-muted-foreground" />
-              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih dokumen (.docx / .pdf)</span>
-              <span className="mt-1 text-xs text-muted-foreground">
-                AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
-              </span>
-            </FileDropzone>
+            <div className="space-y-3">
+              <FileDropzone accept={ACCEPT} onFile={onFile}>
+                <FileUp className="mb-3 size-8 text-muted-foreground" />
+                <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih dokumen (.docx / .pdf)</span>
+                <span className="mt-1 text-xs text-muted-foreground">
+                  AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
+                </span>
+              </FileDropzone>
+              <GroqUsagePanel />
+            </div>
           )}
 
           {phase === "analyzing" && (
