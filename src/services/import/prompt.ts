@@ -54,8 +54,38 @@ export function buildImportUserPrompt(parsed: ParsedDocument): string {
     : "";
 
   // For DOCX we pass the extracted text; for PDF the text is a hint (the PDF
-  // bytes are attached separately for vision).
-  const body = parsed.text ? `\n\nDOCUMENT TEXT:\n${parsed.text.slice(0, 120_000)}` : "";
+  // bytes are attached separately for vision). Flowchart/role-matrix PDFs repeat
+  // the same modules across every role, which inflates the token count enormously
+  // (the whole reason a free-tier request can blow past its per-minute limit), so
+  // we collapse exact-duplicate lines first. The prompt already asks the model to
+  // dedupe across roles, so no unique information is lost.
+  const body = parsed.text ? `\n\nDOCUMENT TEXT:\n${compactText(parsed.text).slice(0, 120_000)}` : "";
 
   return head + tableDump + body;
+}
+
+/**
+ * Squeeze repetition out of extracted document text: trim each line, drop exact
+ * duplicates (keeping first occurrence and its order), and collapse blank runs.
+ * Highly repetitive specs (role-access matrices) shrink dramatically; already-
+ * unique prose is left essentially untouched.
+ */
+export function compactText(raw: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let blank = 0;
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.replace(/[ \t]+/g, " ").trim();
+    if (!trimmed) {
+      if (blank === 0 && out.length) out.push("");
+      blank++;
+      continue;
+    }
+    blank = 0;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out.join("\n").trim();
 }

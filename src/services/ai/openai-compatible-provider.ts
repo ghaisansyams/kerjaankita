@@ -38,6 +38,11 @@ export class OpenAICompatibleProvider implements AiProvider {
   private get visionWidth(): number {
     return Number(process.env.OPENAI_COMPATIBLE_VISION_WIDTH || "1600") || 1600;
   }
+  /** Output cap. Counts against the provider's per-minute token budget, so keep
+   *  it modest on free tiers — the structured output is compact anyway. */
+  private get maxTokens(): number {
+    return Number(process.env.OPENAI_COMPATIBLE_MAX_TOKENS || "4000") || 4000;
+  }
 
   isConfigured(): boolean {
     return this.apiKey.trim().length > 0 && this.baseUrl.length > 0;
@@ -65,58 +70,75 @@ export class OpenAICompatibleProvider implements AiProvider {
   }
 
   /** One Chat Completions call. Text-only when imageDataUrls is empty; multimodal
-   *  otherwise. Throws on a non-OK response so the caller can fall back. */
+   *  otherwise. Throws on a non-OK response so the caller can fall back.
+   *
+   *  When a text-only request is rejected for being too large (free-tier per-minute
+   *  token limits — HTTP 413 / rate_limit on tokens), the document text is trimmed
+   *  and the call is retried a couple of times. A partial import beats a hard fail;
+   *  vision requests don't retry (the caller already falls back to text). */
   private async runCompletion(req: AnalyzeRequest, imageDataUrls: string[]): Promise<unknown> {
-    const text = [req.documentText, req.userPrompt].filter(Boolean).join("\n\n");
-    const userContent =
-      imageDataUrls.length > 0
-        ? [
-            { type: "text", text },
-            ...imageDataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
-          ]
-        : text;
+    const fullText = [req.documentText, req.userPrompt].filter(Boolean).join("\n\n");
+    const canShrink = imageDataUrls.length === 0;
 
-    const body = {
-      model: this.model,
-      temperature: 0.2,
-      max_tokens: 8000,
-      messages: [
-        { role: "system", content: req.systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: req.toolName,
-            description: "Emit the structured document analysis.",
-            parameters: req.jsonSchema,
+    let text = fullText;
+    for (let attempt = 0; ; attempt++) {
+      const userContent =
+        imageDataUrls.length > 0
+          ? [
+              { type: "text", text },
+              ...imageDataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
+            ]
+          : text;
+
+      const body = {
+        model: this.model,
+        temperature: 0.2,
+        max_tokens: this.maxTokens,
+        messages: [
+          { role: "system", content: req.systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: req.toolName,
+              description: "Emit the structured document analysis.",
+              parameters: req.jsonSchema,
+            },
           },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: req.toolName } },
-    };
+        ],
+        tool_choice: { type: "function", function: { name: req.toolName } },
+      };
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as {
+          choices?: Array<{
+            message?: { content?: string | null; tool_calls?: Array<{ function?: { arguments?: string } }> };
+          }>;
+        };
+        const message = data.choices?.[0]?.message;
+        const args = message?.tool_calls?.[0]?.function?.arguments;
+        if (args) return JSON.parse(args);
+        if (message?.content) return JSON.parse(extractJsonObject(message.content));
+        throw new Error("The AI did not return structured output.");
+      }
+
       const detail = await res.text().catch(() => "");
+      const tooLarge = res.status === 413 || /too large|reduce your message|tokens per minute|rate_limit/i.test(detail);
+      if (tooLarge && canShrink && attempt < 3 && text.length > 6000) {
+        // Drop the tail; the model still gets the bulk of the document.
+        text = text.slice(0, Math.floor(text.length * 0.6));
+        continue;
+      }
       throw new Error(`AI request failed (${res.status}): ${detail}`.slice(0, 400));
     }
-
-    const data = (await res.json()) as {
-      choices?: Array<{
-        message?: { content?: string | null; tool_calls?: Array<{ function?: { arguments?: string } }> };
-      }>;
-    };
-    const message = data.choices?.[0]?.message;
-    const args = message?.tool_calls?.[0]?.function?.arguments;
-    if (args) return JSON.parse(args);
-    if (message?.content) return JSON.parse(extractJsonObject(message.content));
-    throw new Error("The AI did not return structured output.");
   }
 }
 
