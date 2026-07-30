@@ -48,7 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LayoutGrid, GitBranch } from "lucide-react";
+import { LayoutGrid, GitBranch, FileDown } from "lucide-react";
 
 export type BoardStatus = {
   id: string;
@@ -395,7 +395,7 @@ export function KanbanBoard({
 
   return (
     <div className="space-y-3">
-      {(roadmaps.length > 0 || (canCreate && cols.length > 0)) && (
+      {cols.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {roadmaps.length > 0 && (
             <>
@@ -441,16 +441,27 @@ export function KanbanBoard({
               </Select>
             </>
           )}
-          {canCreate && cols.length > 0 && (
-            <div className="ml-auto flex flex-wrap gap-2">
-              <ImportTasksDialog
-                projectId={projectId}
-                statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
-                onDone={refetch}
-              />
-              <AiImportDialog onDone={refetch} />
-            </div>
-          )}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                window.open(`/print/report/${projectId}`, "_blank", "noopener,noreferrer")
+              }
+            >
+              <FileDown className="size-4" /> Export Report
+            </Button>
+            {canCreate && (
+              <>
+                <ImportTasksDialog
+                  projectId={projectId}
+                  statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+                  onDone={refetch}
+                />
+                <AiImportDialog onDone={refetch} />
+              </>
+            )}
+          </div>
         </div>
       )}
       {view === "board" ? (
