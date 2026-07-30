@@ -1,16 +1,21 @@
 import "server-only";
 import type { AiProvider, AnalyzeRequest } from "./types";
 import { AiNotConfiguredError } from "./types";
+import { renderPdfPagesAsDataUrls } from "@/services/import/render-pdf";
 
 /**
- * Works with ANY OpenAI-compatible Chat Completions endpoint (our internal
- * service, OpenAI, Together, vLLM, etc.). Everything comes from env — nothing
- * is hardcoded except non-secret fallbacks for base URL / model. The API key is
- * read ONLY from OPENAI_COMPATIBLE_API_KEY and never committed.
+ * Works with ANY OpenAI-compatible Chat Completions endpoint. Config comes from
+ * env only; the API key is read ONLY from OPENAI_COMPATIBLE_API_KEY and never
+ * hardcoded/committed.
  *
- * Structured output uses function-calling (same JSON Schema the AnthropicProvider
- * uses), with a plain-JSON-content fallback for endpoints that don't force tools,
- * so the caller/parser sees the identical validated shape either way.
+ * Document understanding chooses the best strategy transparently:
+ *  - For PDFs (when vision is enabled): render every page to a high-res image
+ *    and send text + page images in ONE request so the model reads layout,
+ *    tables, flowcharts and hierarchy.
+ *  - If the endpoint rejects image input, or rendering fails, it AUTOMATICALLY
+ *    falls back to text-only. Vision is never allowed to break the import.
+ * Structured output is always the same function-call JSON Schema → the caller's
+ * Zod validation and Roadmap→Module→Feature→Checklist hierarchy are unchanged.
  */
 export class OpenAICompatibleProvider implements AiProvider {
   readonly name = "openai-compatible";
@@ -24,6 +29,15 @@ export class OpenAICompatibleProvider implements AiProvider {
   private get apiKey(): string {
     return process.env.OPENAI_COMPATIBLE_API_KEY ?? "";
   }
+  private get visionEnabled(): boolean {
+    return (process.env.OPENAI_COMPATIBLE_VISION || "auto").trim().toLowerCase() !== "off";
+  }
+  private get visionMaxPages(): number {
+    return Number(process.env.OPENAI_COMPATIBLE_VISION_MAX_PAGES || "20") || 20;
+  }
+  private get visionWidth(): number {
+    return Number(process.env.OPENAI_COMPATIBLE_VISION_WIDTH || "1600") || 1600;
+  }
 
   isConfigured(): boolean {
     return this.apiKey.trim().length > 0 && this.baseUrl.length > 0;
@@ -32,14 +46,43 @@ export class OpenAICompatibleProvider implements AiProvider {
   async analyzeDocument(req: AnalyzeRequest): Promise<unknown> {
     if (!this.isConfigured()) throw new AiNotConfiguredError();
 
-    const userText = [req.documentText, req.userPrompt].filter(Boolean).join("\n\n");
+    // Best strategy: vision for PDFs (if enabled), else text. Any vision-side
+    // failure (rendering OR the endpoint rejecting images) falls back to text.
+    if (this.visionEnabled && req.pdfBase64) {
+      try {
+        const images = await renderPdfPagesAsDataUrls(req.pdfBase64, {
+          maxPages: this.visionMaxPages,
+          width: this.visionWidth,
+        });
+        if (images.length > 0) return await this.runCompletion(req, images);
+      } catch (err) {
+        console.warn(
+          `[ai-import] vision path unavailable, falling back to text: ${(err as Error)?.message ?? err}`,
+        );
+      }
+    }
+    return this.runCompletion(req, []);
+  }
+
+  /** One Chat Completions call. Text-only when imageDataUrls is empty; multimodal
+   *  otherwise. Throws on a non-OK response so the caller can fall back. */
+  private async runCompletion(req: AnalyzeRequest, imageDataUrls: string[]): Promise<unknown> {
+    const text = [req.documentText, req.userPrompt].filter(Boolean).join("\n\n");
+    const userContent =
+      imageDataUrls.length > 0
+        ? [
+            { type: "text", text },
+            ...imageDataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
+          ]
+        : text;
+
     const body = {
       model: this.model,
       temperature: 0.2,
       max_tokens: 8000,
       messages: [
         { role: "system", content: req.systemPrompt },
-        { role: "user", content: userText },
+        { role: "user", content: userContent },
       ],
       tools: [
         {
@@ -56,10 +99,7 @@ export class OpenAICompatibleProvider implements AiProvider {
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -69,15 +109,11 @@ export class OpenAICompatibleProvider implements AiProvider {
 
     const data = (await res.json()) as {
       choices?: Array<{
-        message?: {
-          content?: string | null;
-          tool_calls?: Array<{ function?: { arguments?: string } }>;
-        };
+        message?: { content?: string | null; tool_calls?: Array<{ function?: { arguments?: string } }> };
       }>;
     };
     const message = data.choices?.[0]?.message;
     const args = message?.tool_calls?.[0]?.function?.arguments;
-
     if (args) return JSON.parse(args);
     if (message?.content) return JSON.parse(extractJsonObject(message.content));
     throw new Error("The AI did not return structured output.");
