@@ -37,6 +37,7 @@ import { KanbanCardBody } from "./kanban-card";
 import { BoardDrawerHost } from "./board-drawer-host";
 import { AddColumn } from "./add-column";
 import { ImportTasksDialog } from "@/features/import/components/import-tasks-dialog";
+import { AiImportDialog } from "@/features/import/components/ai-import-dialog";
 import { DeleteColumnDialog, type DeleteTarget } from "./delete-column-dialog";
 
 export type BoardStatus = {
@@ -362,12 +363,13 @@ export function KanbanBoard({
   return (
     <div className="space-y-3">
       {canCreate && cols.length > 0 && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
           <ImportTasksDialog
             projectId={projectId}
             statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
             onDone={refetch}
           />
+          <AiImportDialog onDone={refetch} />
         </div>
       )}
       <DndContext

@@ -1,0 +1,376 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { FileUp, KeyRound, Loader2, Sparkles, Trash2, ChevronDown } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  aiImportStatus,
+  analyzeImportDocument,
+  commitAiImport,
+  requestAiImportUpload,
+} from "../ai-actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+type Confidence = "high" | "medium" | "low";
+type Feat = {
+  name: string;
+  description?: string;
+  checklist: { text: string; confidence: Confidence }[];
+  acceptanceCriteria?: string[];
+  imageRefs?: number[];
+  confidence: Confidence;
+};
+type Mod = { name: string; features: Feat[]; confidence: Confidence };
+type Roadmap = { name: string; modules: Mod[]; confidence: Confidence };
+type Analysis = {
+  documentType: string;
+  roles: string[];
+  overallConfidence: Confidence;
+  summary?: string;
+  roadmaps: Roadmap[];
+};
+type Phase = "checking" | "disabled" | "upload" | "analyzing" | "preview" | "committing";
+
+const ACCEPT = ".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const MAX_BYTES = 25 * 1024 * 1024;
+
+function ConfBadge({ c }: { c: Confidence }) {
+  const map: Record<Confidence, string> = {
+    high: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    medium: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    low: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  };
+  return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", map[c])}>{c}</span>;
+}
+
+export function AiImportDialog({ onDone }: { onDone: () => void }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>("checking");
+  const [fileName, setFileName] = useState("");
+  const [jobId, setJobId] = useState("");
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [images, setImages] = useState<{ index: number; previewUrl: string }[]>([]);
+  const [projectName, setProjectName] = useState("");
+  const [dupStrategy, setDupStrategy] = useState<"skip" | "merge" | "duplicate">("duplicate");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function openDialog() {
+    setOpen(true);
+    setPhase("checking");
+    const res = await aiImportStatus();
+    setPhase(res?.ok && res.data.enabled ? "upload" : "disabled");
+  }
+  function reset() {
+    setPhase("checking");
+    setFileName("");
+    setJobId("");
+    setAnalysis(null);
+    setImages([]);
+    setProjectName("");
+    setDupStrategy("duplicate");
+    if (inputRef.current) inputRef.current.value = "";
+  }
+  function close() {
+    setOpen(false);
+    setTimeout(reset, 200);
+  }
+
+  async function onFile(file: File) {
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf")) return toast.error("Hanya .docx atau .pdf.");
+    if (file.size > MAX_BYTES) return toast.error("File terlalu besar (maks 25 MB).");
+    setFileName(file.name);
+    setProjectName(file.name.replace(/\.(docx|pdf)$/i, "").replace(/[_-]+/g, " ").trim());
+    setPhase("analyzing");
+    try {
+      const req = await requestAiImportUpload({ fileName: file.name, fileType: file.type });
+      if (!req?.ok) {
+        setPhase("upload");
+        return toast.error(req?.error.message ?? "Gagal menyiapkan upload.");
+      }
+      const supabase = createClient();
+      const up = await supabase.storage
+        .from(req.data.bucket)
+        .upload(req.data.path, file, { contentType: file.type || undefined, upsert: false });
+      if (up.error) {
+        setPhase("upload");
+        return toast.error("Gagal mengunggah file.");
+      }
+      const res = await analyzeImportDocument({
+        bucket: req.data.bucket,
+        path: req.data.path,
+        fileName: file.name,
+        fileType: file.type,
+      });
+      if (!res?.ok) {
+        if (res?.error.code === "NOT_CONFIGURED") setPhase("disabled");
+        else {
+          setPhase("upload");
+          toast.error(res?.error.message ?? "Gagal menganalisis dokumen.");
+        }
+        return;
+      }
+      setJobId(res.data.jobId);
+      setAnalysis(res.data.analysis as Analysis);
+      setImages((res.data.images ?? []).map((i) => ({ index: i.index, previewUrl: i.previewUrl })));
+      setPhase("preview");
+    } catch {
+      setPhase("upload");
+      toast.error("Terjadi kesalahan.");
+    }
+  }
+
+  // ---- editing helpers (immutable) ----
+  function mutate(fn: (a: Analysis) => void) {
+    setAnalysis((prev) => {
+      if (!prev) return prev;
+      const next = structuredClone(prev) as Analysis;
+      fn(next);
+      return next;
+    });
+  }
+  const counts = analysis
+    ? analysis.roadmaps.reduce(
+        (acc, r) => {
+          acc.roadmaps++;
+          r.modules.forEach((m) => {
+            acc.modules++;
+            acc.features += m.features.length;
+            m.features.forEach((f) => (acc.checklist += f.checklist.length));
+          });
+          return acc;
+        },
+        { roadmaps: 0, modules: 0, features: 0, checklist: 0 },
+      )
+    : null;
+
+  async function commit() {
+    if (!analysis) return;
+    if (!projectName.trim()) return toast.error("Isi nama project dulu.");
+    setPhase("committing");
+    const res = await commitAiImport({ jobId, projectName: projectName.trim(), duplicateStrategy: dupStrategy, analysis });
+    if (!res?.ok) {
+      setPhase("preview");
+      return toast.error(res?.error.message ?? "Gagal membuat project.");
+    }
+    toast.success(`Project dibuat: ${res.data.roadmaps} roadmap, ${res.data.modules} modul, ${res.data.tasks} task`);
+    onDone();
+    close();
+    router.push(`/projects/${res.data.projectId}/board`);
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={openDialog}>
+        <Sparkles className="size-4" /> AI Project Import
+      </Button>
+
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>AI Project Import</DialogTitle>
+            <DialogDescription>
+              Upload dokumen spesifikasi (SRS, feature spec, scope, MOM, laporan). AI membaca
+              strukturnya dan menyusun Roadmap → Modul → Feature (task) → Checklist otomatis.
+            </DialogDescription>
+          </DialogHeader>
+
+          {phase === "checking" && (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" /> Memeriksa ketersediaan AI…
+            </div>
+          )}
+
+          {phase === "disabled" && (
+            <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-5">
+              <div className="flex items-center gap-2 font-medium">
+                <KeyRound className="size-4 text-amber-500" /> AI import belum aktif
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Seluruh pipeline sudah terpasang, tapi butuh <code>ANTHROPIC_API_KEY</code> untuk
+                mulai membaca dokumen. Begitu key ditambahkan, fitur langsung aktif tanpa perubahan
+                lain.
+              </p>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>Buat API key di console.anthropic.com → API Keys.</li>
+                <li>Tambahkan sebagai environment variable <code>ANTHROPIC_API_KEY</code> di Vercel.</li>
+                <li>Redeploy — tombol ini otomatis membaca dokumen.</li>
+              </ol>
+            </div>
+          )}
+
+          {phase === "upload" && (
+            <>
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="flex w-full flex-col items-center rounded-lg border border-dashed p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
+              >
+                <FileUp className="mb-3 size-8 text-muted-foreground" />
+                <span className="text-sm font-medium">Pilih dokumen (.docx / .pdf)</span>
+                <span className="mt-1 text-xs text-muted-foreground">
+                  AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
+                </span>
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onFile(f);
+                }}
+              />
+            </>
+          )}
+
+          {phase === "analyzing" && (
+            <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
+              <Loader2 className="size-8 animate-spin" />
+              AI sedang membaca “{fileName}”… (bisa sampai ~1 menit untuk dokumen besar)
+            </div>
+          )}
+
+          {(phase === "preview" || phase === "committing") && analysis && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Nama project baru</Label>
+                  <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Jika duplikat</Label>
+                  <Select value={dupStrategy} onValueChange={(v) => setDupStrategy(v as typeof dupStrategy)}>
+                    <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="duplicate">Duplikat</SelectItem>
+                      <SelectItem value="skip">Lewati</SelectItem>
+                      <SelectItem value="merge">Gabung</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{analysis.documentType}</span>
+                <ConfBadge c={analysis.overallConfidence} />
+                {counts && (
+                  <span>
+                    {counts.roadmaps} roadmap · {counts.modules} modul · {counts.features} feature ·{" "}
+                    {counts.checklist} checklist · {images.length} gambar
+                  </span>
+                )}
+                {analysis.roles.length > 0 && <span>· Roles: {analysis.roles.join(", ")}</span>}
+              </div>
+
+              <div className="max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+                {analysis.roadmaps.map((rm, ri) => (
+                  <div key={ri} className="rounded-lg border">
+                    <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Roadmap</span>
+                      <span className="text-sm font-semibold">{rm.name}</span>
+                      <ConfBadge c={rm.confidence} />
+                      <Button variant="ghost" size="icon" className="ml-auto size-7"
+                        onClick={() => mutate((a) => { a.roadmaps.splice(ri, 1); })}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                    <div className="space-y-2 p-2">
+                      {rm.modules.map((mod, mi) => (
+                        <div key={mi} className="rounded border">
+                          <div className="flex items-center gap-2 px-2.5 py-1.5">
+                            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Modul</span>
+                            <span className="text-sm font-medium">{mod.name}</span>
+                            <ConfBadge c={mod.confidence} />
+                            <Button variant="ghost" size="icon" className="ml-auto size-6"
+                              onClick={() => mutate((a) => { a.roadmaps[ri].modules.splice(mi, 1); })}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                          <div className="space-y-1.5 px-2.5 pb-2">
+                            {mod.features.map((f, fi) => {
+                              const k = `${ri}-${mi}-${fi}`;
+                              return (
+                                <div key={fi} className="rounded bg-muted/30 p-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <button type="button" onClick={() => setExpanded((e) => ({ ...e, [k]: !e[k] }))}
+                                      className="text-muted-foreground">
+                                      <ChevronDown className={cn("size-3.5 transition-transform", expanded[k] && "rotate-180")} />
+                                    </button>
+                                    <Input value={f.name} className="h-7 flex-1 bg-background"
+                                      onChange={(e) => mutate((a) => { a.roadmaps[ri].modules[mi].features[fi].name = e.target.value; })} />
+                                    <ConfBadge c={f.confidence} />
+                                    <span className="shrink-0 text-[10px] text-muted-foreground">{f.checklist.length}✓</span>
+                                    <Button variant="ghost" size="icon" className="size-6"
+                                      onClick={() => mutate((a) => { a.roadmaps[ri].modules[mi].features.splice(fi, 1); })}>
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                  {expanded[k] && f.checklist.length > 0 && (
+                                    <ul className="ml-6 mt-1.5 space-y-1">
+                                      {f.checklist.map((c, ci) => (
+                                        <li key={ci} className="flex items-center gap-1.5 text-xs">
+                                          <span className="text-muted-foreground">☐</span>
+                                          <span className="flex-1">{c.text}</span>
+                                          <ConfBadge c={c.confidence} />
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {phase === "preview" || phase === "committing" ? (
+              <>
+                <Button variant="ghost" onClick={close} disabled={phase === "committing"}>Batal</Button>
+                <Button onClick={commit} disabled={phase === "committing" || !counts?.features}>
+                  {phase === "committing" ? (
+                    <><Loader2 className="size-4 animate-spin" /> Membuat project…</>
+                  ) : (
+                    `Buat project (${counts?.features ?? 0} task)`
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button variant="ghost" onClick={close} disabled={phase === "analyzing"}>Tutup</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
