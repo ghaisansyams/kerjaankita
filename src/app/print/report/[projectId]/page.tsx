@@ -4,9 +4,10 @@ import { loadProject } from "@/features/projects/loaders";
 import { getBoardData } from "@/repositories/task.repository";
 import { getProjectWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
 import { getOrgBranding } from "@/repositories/mom.repository";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { BoardTask } from "@/features/tasks/board-shared";
 import { ReportProgressDocument, type ReportSection } from "@/features/reports/components/report-progress-document";
-import { PrintTrigger } from "@/features/mom/components/print-trigger";
+import { ReportPrintTrigger } from "@/features/reports/components/report-print-trigger";
 
 export const metadata = { title: "Report Progress — Export" };
 
@@ -38,6 +39,36 @@ export default async function ReportPrintPage({
     bucket.push(t);
   }
 
+  // Task screenshots → short-lived signed URLs, grouped by task, for the body.
+  const imagesByTask = new Map<string, string[]>();
+  try {
+    const admin = createAdminClient();
+    const { data: atts } = await admin
+      .from("attachments")
+      .select("entity_id, path")
+      .eq("project_id", projectId)
+      .eq("entity", "task")
+      .is("deleted_at", null)
+      .ilike("file_type", "image/%")
+      .order("created_at", { ascending: true });
+    const rows = (atts ?? []) as { entity_id: string; path: string }[];
+    if (rows.length > 0) {
+      const { data: signed } = await admin.storage
+        .from("attachments")
+        .createSignedUrls(rows.map((r) => r.path), 3600);
+      const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl] as const));
+      for (const r of rows) {
+        const url = urlByPath.get(r.path);
+        if (!url) continue;
+        const arr = imagesByTask.get(r.entity_id) ?? [];
+        if (!imagesByTask.has(r.entity_id)) imagesByTask.set(r.entity_id, arr);
+        arr.push(url);
+      }
+    }
+  } catch {
+    // best-effort — the report still renders without screenshots
+  }
+
   // Order sections by completion %: the final/Done column is 100%, others by
   // their progress weight (auto_progress); ties fall back to board position.
   const ordered = statuses
@@ -53,7 +84,11 @@ export default async function ReportPrintPage({
       return {
         status: s.name,
         pct,
-        tasks: list.map((t) => ({ number: ++n, title: t.title })),
+        tasks: list.map((t) => ({
+          number: ++n,
+          title: t.title,
+          images: (imagesByTask.get(t.id) ?? []).slice(0, 6),
+        })),
       };
     })
     .filter((sec) => sec.tasks.length > 0);
@@ -63,7 +98,7 @@ export default async function ReportPrintPage({
 
   return (
     <>
-      <PrintTrigger />
+      <ReportPrintTrigger />
       <ReportProgressDocument
         projectName={project.name}
         clientName={clientName}

@@ -14,7 +14,7 @@ function ddmmyyyy(iso: string) {
 export type ReportSection = {
   status: string;
   pct: number;
-  tasks: { number: number; title: string }[];
+  tasks: { number: number; title: string; images: string[] }[];
 };
 
 const CSS = `
@@ -39,7 +39,9 @@ const CSS = `
   .rp-doc .status-block:last-child { margin-bottom: 0; }
   .rp-doc .status-h { font-weight: 700; margin-bottom: 3px; }
   .rp-doc ol.tasks { margin: 0; padding-left: 22px; list-style: decimal outside; }
-  .rp-doc ol.tasks li { margin-bottom: 3px; }
+  .rp-doc ol.tasks li { margin-bottom: 10px; page-break-inside: avoid; }
+  .rp-doc .shots { margin: 5px 0 2px; }
+  .rp-doc .shots img { display: block; max-width: 100%; max-height: 430px; margin: 5px 0; border: 1px solid #cbd5e1; border-radius: 3px; }
   .rp-doc .sign td { border: 1px solid #000; }
   .rp-doc .sign .right { text-align: left; }
   .rp-doc .sign .place { margin-bottom: 2px; font-weight: 700; }
@@ -131,7 +133,17 @@ export function ReportProgressDocument({
                     </div>
                     <ol className="tasks" start={sec.tasks[0]?.number ?? 1}>
                       {sec.tasks.map((t) => (
-                        <li key={t.number}>{t.title}</li>
+                        <li key={t.number}>
+                          {t.title}
+                          {t.images.length > 0 && (
+                            <div className="shots">
+                              {t.images.map((src, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img key={i} src={src} alt="" />
+                              ))}
+                            </div>
+                          )}
+                        </li>
                       ))}
                     </ol>
                   </div>
