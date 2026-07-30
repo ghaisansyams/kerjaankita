@@ -5,6 +5,7 @@ import { loadProject } from "@/features/projects/loaders";
 import { checkPermission } from "@/repositories/permission.repository";
 import { getBoardData } from "@/repositories/task.repository";
 import { getProjectWorkflowId, getWorkflowStatuses } from "@/repositories/workflow.repository";
+import { listRoadmaps, listModules } from "@/repositories/import-planning.repository";
 import { KanbanBoard } from "@/features/tasks/components/kanban-board";
 
 export default async function ProjectBoardPage({
@@ -23,14 +24,17 @@ export default async function ProjectBoardPage({
   if (!project) notFound();
 
   const workflowId = await getProjectWorkflowId(id, orgId);
-  const [statuses, initialTasks, canAny, canOwn, canManageWorkflow, canCreate] = await Promise.all([
-    workflowId ? getWorkflowStatuses(workflowId) : Promise.resolve([]),
-    getBoardData(id),
-    checkPermission(orgId, PERMISSIONS.TASK_UPDATE_ANY, { projectId: id }),
-    checkPermission(orgId, PERMISSIONS.TASK_UPDATE_OWN, { projectId: id }),
-    checkPermission(orgId, PERMISSIONS.WORKFLOW_MANAGE, { projectId: id }),
-    checkPermission(orgId, PERMISSIONS.TASK_CREATE, { projectId: id }),
-  ]);
+  const [statuses, initialTasks, canAny, canOwn, canManageWorkflow, canCreate, roadmaps, modules] =
+    await Promise.all([
+      workflowId ? getWorkflowStatuses(workflowId) : Promise.resolve([]),
+      getBoardData(id),
+      checkPermission(orgId, PERMISSIONS.TASK_UPDATE_ANY, { projectId: id }),
+      checkPermission(orgId, PERMISSIONS.TASK_UPDATE_OWN, { projectId: id }),
+      checkPermission(orgId, PERMISSIONS.WORKFLOW_MANAGE, { projectId: id }),
+      checkPermission(orgId, PERMISSIONS.TASK_CREATE, { projectId: id }),
+      listRoadmaps(id),
+      listModules(id),
+    ]);
 
   return (
     <KanbanBoard
@@ -52,6 +56,12 @@ export default async function ProjectBoardPage({
         weight: s.auto_progress ?? 0,
       }))}
       initialTasks={initialTasks}
+      roadmaps={roadmaps.map((r) => ({ id: r.id as string, name: r.name as string }))}
+      modules={modules.map((m) => ({
+        id: m.id as string,
+        name: m.name as string,
+        roadmapId: (m.roadmap_id as string | null) ?? null,
+      }))}
       initialTaskId={openTaskId ?? null}
     />
   );

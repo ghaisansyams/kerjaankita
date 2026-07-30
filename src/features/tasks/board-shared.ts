@@ -20,11 +20,14 @@ export type BoardTask = {
   checklist_total: number;
   attachments: number;
   comments: number;
+  roadmap_id: string | null;
+  module_id: string | null;
 };
 
 /** Task columns the board query selects (base fields; counts fetched separately). */
 export const BOARD_TASK_SELECT = `
   id, number, title, status_id, priority, assignee_id, due_date, progress, is_blocked, position, estimated_hours,
+  roadmap_id, module_id,
   assignee:profiles!tasks_assignee_id_fkey(full_name, avatar_url)
 `;
 
@@ -40,6 +43,8 @@ export type RawBoardTask = {
   is_blocked: boolean;
   position: number | null;
   estimated_hours: number | null;
+  roadmap_id: string | null;
+  module_id: string | null;
   assignee: { full_name: string | null; avatar_url: string | null } | null;
 };
 
@@ -82,5 +87,7 @@ export function assembleBoard(
     checklist_total: clTotal.get(t.id) ?? 0,
     attachments: att.get(t.id) ?? 0,
     comments: com.get(t.id) ?? 0,
+    roadmap_id: t.roadmap_id,
+    module_id: t.module_id,
   }));
 }

@@ -39,6 +39,16 @@ import { AddColumn } from "./add-column";
 import { ImportTasksDialog } from "@/features/import/components/import-tasks-dialog";
 import { AiImportDialog } from "@/features/import/components/ai-import-dialog";
 import { DeleteColumnDialog, type DeleteTarget } from "./delete-column-dialog";
+import { RoadmapView } from "./roadmap-view";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { LayoutGrid, GitBranch } from "lucide-react";
 
 export type BoardStatus = {
   id: string;
@@ -61,6 +71,8 @@ export function KanbanBoard({
   canOwn,
   canManageWorkflow,
   canCreate,
+  roadmaps,
+  modules,
   initialTaskId = null,
 }: {
   projectId: string;
@@ -72,11 +84,16 @@ export function KanbanBoard({
   canOwn: boolean;
   canManageWorkflow: boolean;
   canCreate: boolean;
+  roadmaps: { id: string; name: string }[];
+  modules: { id: string; name: string; roadmapId: string | null }[];
   initialTaskId?: string | null;
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState<BoardTask[]>(initialTasks);
   const [cols, setCols] = useState<BoardStatus[]>(statuses);
+  const [view, setView] = useState<"board" | "roadmap">("board");
+  const [roadmapFilter, setRoadmapFilter] = useState<string>("all");
+  const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<"card" | "column">("card");
   const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId);
@@ -261,18 +278,34 @@ export function KanbanBoard({
     [deleteTarget, projectId, mutate],
   );
 
+  // Roadmap/Module filters apply to BOTH the Kanban and the Roadmap view.
+  const shownTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          (roadmapFilter === "all" || t.roadmap_id === roadmapFilter) &&
+          (moduleFilter === "all" || t.module_id === moduleFilter),
+      ),
+    [tasks, roadmapFilter, moduleFilter],
+  );
+
   const columns = useMemo(() => {
     const byStatus = new Map<string, BoardTask[]>();
     for (const s of cols) byStatus.set(s.id, []);
     const orphans: BoardTask[] = [];
-    for (const t of tasks) {
+    for (const t of shownTasks) {
       const bucket = t.status_id ? byStatus.get(t.status_id) : undefined;
       if (bucket) bucket.push(t);
       else orphans.push(t);
     }
     for (const arr of byStatus.values()) arr.sort((a, b) => a.position - b.position || a.number - b.number);
     return { byStatus, orphans };
-  }, [cols, tasks]);
+  }, [cols, shownTasks]);
+
+  const moduleOptions = useMemo(
+    () => (roadmapFilter === "all" ? modules : modules.filter((m) => m.roadmapId === roadmapFilter)),
+    [modules, roadmapFilter],
+  );
 
   const activeTask = activeType === "card" && activeId ? (tasks.find((t) => t.id === activeId) ?? null) : null;
   const activeCol = activeType === "column" && activeId ? (cols.find((c) => c.id === activeId) ?? null) : null;
@@ -362,65 +395,124 @@ export function KanbanBoard({
 
   return (
     <div className="space-y-3">
-      {canCreate && cols.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-2">
-          <ImportTasksDialog
-            projectId={projectId}
-            statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
-            onDone={refetch}
-          />
-          <AiImportDialog onDone={refetch} />
+      {(roadmaps.length > 0 || (canCreate && cols.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {roadmaps.length > 0 && (
+            <>
+              <div className="flex overflow-hidden rounded-md border">
+                <button
+                  type="button"
+                  onClick={() => setView("board")}
+                  className={`flex items-center gap-1 px-2.5 py-1 text-xs ${view === "board" ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"}`}
+                >
+                  <LayoutGrid className="size-3.5" /> Board
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("roadmap")}
+                  className={`flex items-center gap-1 border-l px-2.5 py-1 text-xs ${view === "roadmap" ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"}`}
+                >
+                  <GitBranch className="size-3.5" /> Roadmap
+                </button>
+              </div>
+              <Select
+                value={roadmapFilter}
+                onValueChange={(v) => {
+                  setRoadmapFilter(v);
+                  setModuleFilter("all");
+                }}
+              >
+                <SelectTrigger className="h-8 w-36"><SelectValue placeholder="Roadmap" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua roadmap</SelectItem>
+                  {roadmaps.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={moduleFilter} onValueChange={setModuleFilter}>
+                <SelectTrigger className="h-8 w-36"><SelectValue placeholder="Modul" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua modul</SelectItem>
+                  {moduleOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
+          {canCreate && cols.length > 0 && (
+            <div className="ml-auto flex flex-wrap gap-2">
+              <ImportTasksDialog
+                projectId={projectId}
+                statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+                onDone={refetch}
+              />
+              <AiImportDialog onDone={refetch} />
+            </div>
+          )}
         </div>
       )}
-      <DndContext
-        id="flowdesk-board"
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onDragCancel={onDragCancel}
-      >
-      <div className="flex items-start gap-3 overflow-x-auto pb-2">
-        <SortableContext items={cols.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-          {cols.map((s) => (
-            <KanbanColumn
-              key={s.id}
-              status={s}
-              tasks={columns.byStatus.get(s.id) ?? []}
-              canMove={canMove}
-              canManage={canManageWorkflow}
-              handlers={handlers}
-            />
-          ))}
-        </SortableContext>
-        {canManageWorkflow && <AddColumn onCreate={addColumn} />}
-      </div>
+      {view === "board" ? (
+        <DndContext
+          id="flowdesk-board"
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
+        >
+          <div className="flex items-start gap-3 overflow-x-auto pb-2">
+            <SortableContext items={cols.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+              {cols.map((s) => (
+                <KanbanColumn
+                  key={s.id}
+                  status={s}
+                  tasks={columns.byStatus.get(s.id) ?? []}
+                  canMove={canMove}
+                  canManage={canManageWorkflow}
+                  handlers={handlers}
+                />
+              ))}
+            </SortableContext>
+            {canManageWorkflow && <AddColumn onCreate={addColumn} />}
+          </div>
 
-      {columns.orphans.length > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {columns.orphans.length} task(s) sit outside this workflow and aren&apos;t shown on the board.
-        </p>
+          {columns.orphans.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {columns.orphans.length} task(s) sit outside this workflow and aren&apos;t shown on the board.
+            </p>
+          )}
+
+          <DragOverlay>
+            {activeTask && (
+              <div className="w-[300px] rotate-2">
+                <KanbanCardBody task={activeTask} dragging />
+              </div>
+            )}
+            {activeCol && (
+              <div className="w-[300px] rotate-1 overflow-hidden rounded-xl border bg-card shadow-xl">
+                <div className="h-0.5 w-full" style={{ backgroundColor: activeCol.color ?? "#94a3b8" }} />
+                <div className="flex items-center gap-2 px-2.5 py-2">
+                  <span className="size-2 rounded-full" style={{ backgroundColor: activeCol.color ?? "#94a3b8" }} />
+                  <span className="text-sm font-semibold">{activeCol.name}</span>
+                  <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                    {columns.byStatus.get(activeCol.id)?.length ?? 0}
+                  </span>
+                </div>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <RoadmapView
+          roadmaps={roadmaps}
+          modules={modules}
+          tasks={shownTasks}
+          statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+          onOpenTask={openTask}
+        />
       )}
-
-      <DragOverlay>
-        {activeTask && (
-          <div className="w-[300px] rotate-2">
-            <KanbanCardBody task={activeTask} dragging />
-          </div>
-        )}
-        {activeCol && (
-          <div className="w-[300px] rotate-1 overflow-hidden rounded-xl border bg-card shadow-xl">
-            <div className="h-0.5 w-full" style={{ backgroundColor: activeCol.color ?? "#94a3b8" }} />
-            <div className="flex items-center gap-2 px-2.5 py-2">
-              <span className="size-2 rounded-full" style={{ backgroundColor: activeCol.color ?? "#94a3b8" }} />
-              <span className="text-sm font-semibold">{activeCol.name}</span>
-              <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                {columns.byStatus.get(activeCol.id)?.length ?? 0}
-              </span>
-            </div>
-          </div>
-        )}
-      </DragOverlay>
 
       <BoardDrawerHost projectId={projectId} taskId={openTaskId} onClose={closeTask} />
 
@@ -430,7 +522,6 @@ export function KanbanBoard({
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
       />
-      </DndContext>
     </div>
   );
 }
