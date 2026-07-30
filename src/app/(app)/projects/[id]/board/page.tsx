@@ -39,6 +39,7 @@ export default async function ProjectBoardPage({
   return (
     <KanbanBoard
       projectId={id}
+      projectName={project.name}
       workflowId={workflowId ?? ""}
       currentUserId={ctx.profile.id}
       canAny={canAny}

@@ -65,7 +65,16 @@ function ConfBadge({ c }: { c: Confidence }) {
   return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", map[c])}>{c}</span>;
 }
 
-export function AiImportDialog({ onDone }: { onDone: () => void }) {
+export function AiImportDialog({
+  onDone,
+  targetProjectId,
+  targetProjectName,
+}: {
+  onDone: () => void;
+  /** When opened from a project board, import INTO that project by default. */
+  targetProjectId?: string;
+  targetProjectName?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("checking");
@@ -75,6 +84,7 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
   const [images, setImages] = useState<{ index: number; previewUrl: string }[]>([]);
   const [projectName, setProjectName] = useState("");
   const [dupStrategy, setDupStrategy] = useState<"skip" | "merge" | "duplicate">("duplicate");
+  const [target, setTarget] = useState<"existing" | "new">(targetProjectId ? "existing" : "new");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   async function openDialog() {
@@ -91,6 +101,7 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
     setImages([]);
     setProjectName("");
     setDupStrategy("duplicate");
+    setTarget(targetProjectId ? "existing" : "new");
   }
   function close() {
     setOpen(false);
@@ -168,14 +179,23 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
 
   async function commit() {
     if (!analysis) return;
-    if (!projectName.trim()) return toast.error("Isi nama project dulu.");
+    const intoExisting = target === "existing" && !!targetProjectId;
+    if (!intoExisting && !projectName.trim()) return toast.error("Isi nama project dulu.");
     setPhase("committing");
-    const res = await commitAiImport({ jobId, projectName: projectName.trim(), duplicateStrategy: dupStrategy, analysis });
+    const res = await commitAiImport(
+      intoExisting
+        ? { jobId, projectId: targetProjectId, duplicateStrategy: dupStrategy, analysis }
+        : { jobId, projectName: projectName.trim(), duplicateStrategy: dupStrategy, analysis },
+    );
     if (!res?.ok) {
       setPhase("preview");
       return toast.error(res?.error.message ?? "Gagal membuat project.");
     }
-    toast.success(`Project dibuat: ${res.data.roadmaps} roadmap, ${res.data.modules} modul, ${res.data.tasks} task`);
+    toast.success(
+      intoExisting
+        ? `Ditambahkan ke project: ${res.data.tasks} task, ${res.data.modules} modul`
+        : `Project dibuat: ${res.data.roadmaps} roadmap, ${res.data.modules} modul, ${res.data.tasks} task`,
+    );
     onDone();
     close();
     router.push(`/projects/${res.data.projectId}/board`);
@@ -244,10 +264,26 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
           {(phase === "preview" || phase === "committing") && analysis && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Nama project baru</Label>
-                  <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8" />
-                </div>
+                {targetProjectId && (
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Tujuan import</Label>
+                    <Select value={target} onValueChange={(v) => setTarget(v as "existing" | "new")}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="existing">
+                          Tambah ke project ini{targetProjectName ? ` — ${targetProjectName}` : ""}
+                        </SelectItem>
+                        <SelectItem value="new">Buat project baru</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {(!targetProjectId || target === "new") && (
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Nama project baru</Label>
+                    <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-8" />
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label className="text-xs">Jika duplikat</Label>
                   <Select value={dupStrategy} onValueChange={(v) => setDupStrategy(v as typeof dupStrategy)}>
@@ -346,7 +382,9 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
                 <Button variant="ghost" onClick={close} disabled={phase === "committing"}>Batal</Button>
                 <Button onClick={commit} disabled={phase === "committing" || !counts?.features}>
                   {phase === "committing" ? (
-                    <><Loader2 className="size-4 animate-spin" /> Membuat project…</>
+                    <><Loader2 className="size-4 animate-spin" /> Menyimpan…</>
+                  ) : target === "existing" && targetProjectId ? (
+                    `Tambah ke project (${counts?.features ?? 0} task)`
                   ) : (
                     `Buat project (${counts?.features ?? 0} task)`
                   )}

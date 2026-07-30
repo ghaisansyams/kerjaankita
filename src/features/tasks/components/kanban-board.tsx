@@ -63,6 +63,7 @@ export type BoardStatus = {
 
 export function KanbanBoard({
   projectId,
+  projectName,
   workflowId,
   statuses,
   initialTasks,
@@ -76,6 +77,7 @@ export function KanbanBoard({
   initialTaskId = null,
 }: {
   projectId: string;
+  projectName?: string;
   workflowId: string;
   statuses: BoardStatus[];
   initialTasks: BoardTask[];
@@ -458,7 +460,11 @@ export function KanbanBoard({
                   statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
                   onDone={refetch}
                 />
-                <AiImportDialog onDone={refetch} />
+                <AiImportDialog
+                  onDone={refetch}
+                  targetProjectId={projectId}
+                  targetProjectName={projectName}
+                />
               </>
             )}
           </div>
