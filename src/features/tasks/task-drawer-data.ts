@@ -90,7 +90,7 @@ export async function buildTaskDrawerData(
     projectId,
     task: vm,
     statuses: statuses.map((s) => ({ id: s.id, name: s.name, color: s.color, category: s.category })),
-    checklist: checklist.map((c) => ({ id: c.id, content: c.content, isDone: c.is_done })),
+    checklist: checklist.map((c) => ({ id: c.id, content: c.content, isDone: c.is_done, depth: c.depth ?? 0 })),
     members: members.map((m) => ({ id: m.id, name: m.full_name ?? m.email ?? "Member" })),
     canEditAll: canAny,
     canQuickEdit,

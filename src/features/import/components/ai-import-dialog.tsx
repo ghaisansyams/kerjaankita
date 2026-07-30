@@ -34,10 +34,11 @@ import {
 import { cn } from "@/lib/utils";
 
 type Confidence = "high" | "medium" | "low";
+type ChecklistItem = { text: string; confidence: Confidence; children?: { text: string; confidence: Confidence }[] };
 type Feat = {
   name: string;
   description?: string;
-  checklist: { text: string; confidence: Confidence }[];
+  checklist: ChecklistItem[];
   acceptanceCriteria?: string[];
   imageRefs?: number[];
   confidence: Confidence;
@@ -169,7 +170,10 @@ export function AiImportDialog({
           r.modules.forEach((m) => {
             acc.modules++;
             acc.features += m.features.length;
-            m.features.forEach((f) => (acc.checklist += f.checklist.length));
+            m.features.forEach(
+              (f) =>
+                (acc.checklist += f.checklist.reduce((n, c) => n + 1 + (c.children?.length ?? 0), 0)),
+            );
           });
           return acc;
         },
@@ -346,7 +350,9 @@ export function AiImportDialog({
                                     <Input value={f.name} className="h-7 flex-1 bg-background"
                                       onChange={(e) => mutate((a) => { a.roadmaps[ri].modules[mi].features[fi].name = e.target.value; })} />
                                     <ConfBadge c={f.confidence} />
-                                    <span className="shrink-0 text-[10px] text-muted-foreground">{f.checklist.length}✓</span>
+                                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                                      {f.checklist.reduce((n, c) => n + 1 + (c.children?.length ?? 0), 0)}✓
+                                    </span>
                                     <Button variant="ghost" size="icon" className="size-6"
                                       onClick={() => mutate((a) => { a.roadmaps[ri].modules[mi].features.splice(fi, 1); })}>
                                       <Trash2 className="size-3.5" />
@@ -355,10 +361,25 @@ export function AiImportDialog({
                                   {expanded[k] && f.checklist.length > 0 && (
                                     <ul className="ml-6 mt-1.5 space-y-1">
                                       {f.checklist.map((c, ci) => (
-                                        <li key={ci} className="flex items-center gap-1.5 text-xs">
-                                          <span className="text-muted-foreground">☐</span>
-                                          <span className="flex-1">{c.text}</span>
-                                          <ConfBadge c={c.confidence} />
+                                        <li key={ci} className="space-y-1">
+                                          <div className="flex items-center gap-1.5 text-xs">
+                                            <span className="text-muted-foreground">☐</span>
+                                            <span className="flex-1 font-medium">{c.text}</span>
+                                            <ConfBadge c={c.confidence} />
+                                          </div>
+                                          {c.children && c.children.length > 0 && (
+                                            <ul className="ml-4 space-y-0.5 border-l pl-2.5">
+                                              {c.children.map((cc, cci) => (
+                                                <li
+                                                  key={cci}
+                                                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                                                >
+                                                  <span>☐</span>
+                                                  <span className="flex-1">{cc.text}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
                                         </li>
                                       ))}
                                     </ul>

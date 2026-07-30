@@ -142,9 +142,21 @@ export class OpenAICompatibleProvider implements AiProvider {
           }>;
         };
         const message = data.choices?.[0]?.message;
-        const args = message?.tool_calls?.[0]?.function?.arguments;
-        if (args) return JSON.parse(args);
-        if (message?.content) return JSON.parse(extractJsonObject(message.content));
+        const rawArgs = message?.tool_calls?.[0]?.function?.arguments;
+        const rawContent = message?.content ?? null;
+        if (rawArgs || rawContent) {
+          try {
+            return JSON.parse(rawArgs ?? extractJsonObject(rawContent as string));
+          } catch {
+            // Output was likely truncated at max_tokens → shrink the input so the
+            // response is smaller, then retry. A smaller import beats none.
+            if (canShrink && text.length > 6000) {
+              text = text.slice(0, Math.floor(text.length * 0.6));
+              continue;
+            }
+            throw new Error("The AI response was cut off. Try a smaller document.");
+          }
+        }
         if (!jsonMode) {
           jsonMode = true; // endpoint returned nothing usable via tools → try JSON mode
           continue;

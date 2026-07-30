@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type ChecklistItemVM = { id: string; content: string; isDone: boolean };
+export type ChecklistItemVM = { id: string; content: string; isDone: boolean; depth?: number };
 
 export function TaskChecklist({
   taskId,
@@ -101,7 +101,13 @@ export function TaskChecklist({
 
       <ul className="space-y-1">
         {items.map((item) => (
-          <li key={item.id} className="group flex items-center gap-2">
+          <li
+            key={item.id}
+            className={cn(
+              "group flex items-center gap-2",
+              (item.depth ?? 0) > 0 && "ml-6 border-l pl-3",
+            )}
+          >
             <Checkbox
               checked={item.isDone}
               onCheckedChange={() => canEdit && toggle(item)}

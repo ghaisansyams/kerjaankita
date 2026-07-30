@@ -6,7 +6,7 @@ export async function listChecklist(taskId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("task_checklist_items")
-    .select("id, content, is_done, position")
+    .select("id, content, is_done, position, depth")
     .eq("task_id", taskId)
     .is("deleted_at", null)
     .order("position")

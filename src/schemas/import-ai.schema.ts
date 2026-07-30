@@ -7,9 +7,15 @@ export const DUPLICATE_STRATEGY = ["skip", "merge", "duplicate"] as const;
 // Validated shape of the model's output (Project → Roadmap → Module → Feature
 // → Checklist). Every level carries a confidence score.
 // ---------------------------------------------------------------------------
-export const aiChecklistItemSchema = z.object({
+export const aiChecklistLeafSchema = z.object({
   text: z.string().trim().min(1).max(500),
   confidence: z.enum(CONFIDENCE).catch("medium"),
+});
+
+// A checklist item may carry one level of sub-items (e.g. a sub-module and its
+// individual CRUD actions), rendered as an indented nested checklist.
+export const aiChecklistItemSchema = aiChecklistLeafSchema.extend({
+  children: z.array(aiChecklistLeafSchema).max(200).optional().default([]),
 });
 
 export const aiFeatureSchema = z.object({
@@ -93,10 +99,24 @@ export const AI_ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
                       acceptanceCriteria: { type: "array", items: { type: "string" } },
                       checklist: {
                         type: "array",
-                        description: "Level 4: checklist items inside the task.",
+                        description:
+                          "Level 4: checklist items inside the task (e.g. each sub-module). An item MAY carry `children` for one deeper level (e.g. its individual CRUD actions).",
                         items: {
                           type: "object",
-                          properties: { text: { type: "string" }, confidence: conf },
+                          properties: {
+                            text: { type: "string" },
+                            confidence: conf,
+                            children: {
+                              type: "array",
+                              description:
+                                "Level 5: sub-checklist items, one level deep — the concrete leaf actions under this item (List/Detail/Add/Edit/Delete …).",
+                              items: {
+                                type: "object",
+                                properties: { text: { type: "string" }, confidence: conf },
+                                required: ["text"],
+                              },
+                            },
+                          },
                           required: ["text"],
                         },
                       },

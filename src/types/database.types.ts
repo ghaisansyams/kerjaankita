@@ -2250,6 +2250,7 @@ export type Database = {
           done_at: string | null;
           done_by: string | null;
           position: number;
+          depth: number;
           created_at: string;
           created_by: string | null;
           updated_at: string;
@@ -2266,6 +2267,7 @@ export type Database = {
           done_at?: string | null;
           done_by?: string | null;
           position?: number;
+          depth?: number;
           created_at?: string;
           created_by?: string | null;
           updated_at?: string;
@@ -2282,6 +2284,7 @@ export type Database = {
           done_at?: string | null;
           done_by?: string | null;
           position?: number;
+          depth?: number;
           created_at?: string;
           created_by?: string | null;
           updated_at?: string;

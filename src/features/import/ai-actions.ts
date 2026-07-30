@@ -304,18 +304,34 @@ export async function commitAiImport(
             existing.set(key, taskId);
           }
 
-          // Checklist
-          if (feat.checklist.length) {
-            await plan.insertChecklistItems(
-              feat.checklist.map((c, i) => ({
+          // Checklist — flatten one level of nesting: each parent (depth 0) is
+          // followed by its children (depth 1), positions kept sequential.
+          const checklistRows: Record<string, unknown>[] = [];
+          let cPos = 0;
+          for (const item of feat.checklist) {
+            checklistRows.push({
+              organization_id: orgId,
+              task_id: taskId,
+              content: item.text,
+              position: cPos++,
+              depth: 0,
+              created_by: ctx.profile.id,
+              updated_by: ctx.profile.id,
+            });
+            for (const child of item.children ?? []) {
+              checklistRows.push({
                 organization_id: orgId,
                 task_id: taskId,
-                content: c.text,
-                position: i,
+                content: child.text,
+                position: cPos++,
+                depth: 1,
                 created_by: ctx.profile.id,
                 updated_by: ctx.profile.id,
-              })),
-            );
+              });
+            }
+          }
+          if (checklistRows.length) {
+            await plan.insertChecklistItems(checklistRows);
           }
 
           // Attach referenced images (in order) to the task.
