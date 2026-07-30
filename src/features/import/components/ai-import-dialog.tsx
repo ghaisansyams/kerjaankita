@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FileUp, KeyRound, Loader2, Sparkles, Trash2, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { FileDropzone } from "@/components/file-dropzone";
 import {
   aiImportStatus,
   analyzeImportDocument,
@@ -74,7 +75,6 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
   const [projectName, setProjectName] = useState("");
   const [dupStrategy, setDupStrategy] = useState<"skip" | "merge" | "duplicate">("duplicate");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const inputRef = useRef<HTMLInputElement>(null);
 
   async function openDialog() {
     setOpen(true);
@@ -90,7 +90,6 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
     setImages([]);
     setProjectName("");
     setDupStrategy("duplicate");
-    if (inputRef.current) inputRef.current.value = "";
   }
   function close() {
     setOpen(false);
@@ -222,29 +221,13 @@ export function AiImportDialog({ onDone }: { onDone: () => void }) {
           )}
 
           {phase === "upload" && (
-            <>
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="flex w-full flex-col items-center rounded-lg border border-dashed p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
-              >
-                <FileUp className="mb-3 size-8 text-muted-foreground" />
-                <span className="text-sm font-medium">Pilih dokumen (.docx / .pdf)</span>
-                <span className="mt-1 text-xs text-muted-foreground">
-                  AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
-                </span>
-              </button>
-              <input
-                ref={inputRef}
-                type="file"
-                accept={ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onFile(f);
-                }}
-              />
-            </>
+            <FileDropzone accept={ACCEPT} onFile={onFile}>
+              <FileUp className="mb-3 size-8 text-muted-foreground" />
+              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih dokumen (.docx / .pdf)</span>
+              <span className="mt-1 text-xs text-muted-foreground">
+                AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
+              </span>
+            </FileDropzone>
           )}
 
           {phase === "analyzing" && (

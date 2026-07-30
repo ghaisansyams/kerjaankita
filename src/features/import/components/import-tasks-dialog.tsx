@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FileUp, ImageOff, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { FileDropzone } from "@/components/file-dropzone";
 import {
   commitImportedTasks,
   parseImportDocument,
@@ -52,14 +53,12 @@ export function ImportTasksDialog({
   const [tasks, setTasks] = useState<ImportPreviewTask[]>([]);
   const [statusId, setStatusId] = useState(statuses[0]?.id ?? "");
   const [fileName, setFileName] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
     setPhase("upload");
     setTasks([]);
     setFileName("");
     setStatusId(statuses[0]?.id ?? "");
-    if (inputRef.current) inputRef.current.value = "";
   }
   function close() {
     setOpen(false);
@@ -171,28 +170,14 @@ export function ImportTasksDialog({
           </DialogHeader>
 
           {phase === "upload" && (
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="flex w-full flex-col items-center rounded-lg border border-dashed p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
-            >
+            <FileDropzone accept={ACCEPT} onFile={onFile}>
               <FileUp className="mb-3 size-8 text-muted-foreground" />
-              <span className="text-sm font-medium">Pilih file Word (.docx) atau PDF</span>
+              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih file Word (.docx) / PDF</span>
               <span className="mt-1 text-xs text-muted-foreground">
                 File Word memberikan gambar otomatis · PDF diproses sebagai teks · maks 25 MB
               </span>
-            </button>
+            </FileDropzone>
           )}
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onFile(f);
-            }}
-          />
 
           {phase === "parsing" && (
             <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">

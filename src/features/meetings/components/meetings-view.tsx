@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { FileAudio, Loader2, Mic, Plus, Search, UploadCloud } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { FileDropzone } from "@/components/file-dropzone";
 import { createMeeting, requestMeetingUpload } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ export type MeetingVM = {
   createdAt: string;
 };
 
-const ACCEPT = ".mp3,.wav,.m4a,.aac,.ogg,.opus,.webm,audio/*";
+const ACCEPT = ".mp3,.wav,.m4a,.aac,.ogg,.opus,.webm,.mp4,audio/*,video/mp4";
 const MAX_BYTES = 200 * 1024 * 1024;
 
 function fmtBytes(n: number | null) {
@@ -57,7 +58,9 @@ function readDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     try {
       const url = URL.createObjectURL(file);
-      const a = document.createElement("audio");
+      const a = document.createElement(
+        file.type.startsWith("video/") ? "video" : "audio",
+      ) as HTMLMediaElement;
       a.preload = "metadata";
       a.onloadedmetadata = () => {
         URL.revokeObjectURL(url);
@@ -88,7 +91,6 @@ export function MeetingsView({ meetings, sttEnabled }: { meetings: MeetingVM[]; 
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -213,7 +215,7 @@ export function MeetingsView({ meetings, sttEnabled }: { meetings: MeetingVM[]; 
           <DialogHeader>
             <DialogTitle>Rekaman baru</DialogTitle>
             <DialogDescription>
-              Unggah audio rapat (MP3, WAV, M4A, AAC, OGG). Maks 200 MB.
+              Unggah audio/video rapat (MP3, WAV, M4A, AAC, OGG, MP4). Maks 200 MB.
               {!sttEnabled && " Transkrip otomatis aktif setelah API key STT dipasang."}
             </DialogDescription>
           </DialogHeader>
@@ -222,22 +224,13 @@ export function MeetingsView({ meetings, sttEnabled }: { meetings: MeetingVM[]; 
               <Label className="text-xs">Judul rapat</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Rapat dengan klien…" />
             </div>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="flex w-full flex-col items-center rounded-lg border border-dashed p-6 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
-            >
+            <FileDropzone accept={ACCEPT} onFile={pickFile} disabled={uploading}>
               <UploadCloud className="mb-2 size-7 text-muted-foreground" />
-              <span className="text-sm font-medium">{file ? file.name : "Pilih file audio"}</span>
+              <span className="text-sm font-medium">
+                {file ? file.name : "Tarik & letakkan, atau pilih file audio/video"}
+              </span>
               {file && <span className="mt-0.5 text-xs text-muted-foreground">{fmtBytes(file.size)}</span>}
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPT}
-              className="hidden"
-              onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-            />
+            </FileDropzone>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={uploading}>

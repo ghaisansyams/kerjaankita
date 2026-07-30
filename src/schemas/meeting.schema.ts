@@ -14,6 +14,8 @@ export const MEETING_AUDIO_MIME = [
   "audio/ogg",
   "audio/opus",
   "audio/webm",
+  "video/mp4",
+  "video/webm",
 ] as const;
 
 export const requestMeetingUploadSchema = z.object({
