@@ -8,6 +8,7 @@ import {
   Bell,
   Building2,
   FileText,
+  Mic,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
       { title: "Projects", href: "/projects", icon: FolderKanban },
       { title: "MOM", href: "/mom", icon: FileText, internalOnly: true },
+      { title: "AI Meeting Assistant", href: "/meetings", icon: Mic, internalOnly: true },
       { title: "Timeline", href: "/timeline", icon: GanttChart, internalOnly: true },
       { title: "Calendar", href: "/calendar", icon: CalendarDays, internalOnly: true },
       { title: "Notifications", href: "/notifications", icon: Bell },
