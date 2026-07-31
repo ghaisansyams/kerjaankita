@@ -107,7 +107,7 @@ export class OpenAICompatibleProvider implements AiProvider {
       const body: Record<string, unknown> = {
         model: this.model,
         temperature: 0.2,
-        max_tokens: this.maxTokens,
+        max_tokens: req.maxTokens ?? this.maxTokens,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -170,9 +170,11 @@ export class OpenAICompatibleProvider implements AiProvider {
         jsonMode = true;
         continue;
       }
-      // Free-tier per-minute token limit → drop the tail and retry smaller.
-      const tooLarge = res.status === 413 || /too large|reduce your message|tokens per minute|rate_limit/i.test(detail);
-      if (tooLarge && canShrink && text.length > 6000) {
+      // A SINGLE request that is itself too big (413) → drop the tail, retry
+      // smaller. A cumulative per-minute rate limit (429) is NOT fixed by
+      // shrinking — throw so the caller can pace/wait instead of hammering.
+      const singleTooLarge = res.status === 413;
+      if (singleTooLarge && canShrink && text.length > 6000) {
         text = text.slice(0, Math.floor(text.length * 0.6));
         continue;
       }

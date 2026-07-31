@@ -157,6 +157,7 @@ export async function analyzeImportDocument(input: unknown): Promise<
       toolName: AI_ANALYSIS_TOOL_NAME,
       documentText: doc.text || undefined,
       pdfBase64: doc.pdfBase64,
+      maxTokens: 3000, // pass 1 only lists areas + roles → small output
     });
 
     const val = aiAnalysisSchema.safeParse(raw);
@@ -218,25 +219,37 @@ export async function expandImportTask(
     return actionError("NOT_FOUND", "Import job not found.");
   }
   const result = (job.result ?? {}) as {
-    analysis?: { roadmaps?: Array<{ modules?: Array<{ features?: Array<{ name?: string }> }> }> };
+    analysis?: {
+      roadmaps?: Array<{
+        modules?: Array<{ features?: Array<{ name?: string; checklist?: Array<{ text?: string }> }> }>;
+      }>;
+    };
     documentText?: string;
   };
   const feature =
     result.analysis?.roadmaps?.[roadmapIndex]?.modules?.[moduleIndex]?.features?.[featureIndex];
   if (!feature?.name) return actionError("NOT_FOUND", "Area not found.");
+  const subModules = (feature.checklist ?? []).map((c) => c?.text ?? "").filter(Boolean);
 
   try {
     const raw = await provider.analyzeDocument({
       fileName: "expand",
       systemPrompt: buildExpandSystemPrompt(),
-      userPrompt: buildExpandUserPrompt(feature.name, result.documentText ?? ""),
+      userPrompt: buildExpandUserPrompt(feature.name, subModules, result.documentText ?? ""),
       jsonSchema: AI_EXPAND_JSON_SCHEMA,
       toolName: AI_EXPAND_TOOL_NAME,
+      maxTokens: 2500, // one area's checklist → small; keeps request under TPM
     });
     const val = aiExpandSchema.safeParse(raw);
     if (!val.success) return actionError("INTERNAL", "Couldn't expand this area.");
     return actionOk({ checklist: val.data.checklist });
   } catch (e) {
+    // Preserve rate-limit / size details so the client can pace + retry; keep
+    // other failures generic.
+    const msg = (e as Error)?.message ?? "";
+    if (/rate|tokens per minute|429|too large|413|AI request failed/i.test(msg)) {
+      return actionError("INTERNAL", msg.slice(0, 300));
+    }
     return mapUnknownError(e);
   }
 }

@@ -167,21 +167,36 @@ export function AiImportDialog({
       setExpandTotal(refs.length);
       setExpandDone(0);
       setPhase("expanding");
+      // Each call reserves its max_tokens against the free tier's ~12k tokens/min,
+      // so pace conservatively to avoid rate limits; a 429 still waits a full
+      // window and retries. Slow but complete — the whole point of this step.
+      const PACE_MS = 16000;
+      let failed = 0;
       for (let i = 0; i < refs.length; i++) {
         const { r, m, f } = refs[i];
         let ex = await expandImportTask({ jobId: jid, roadmapIndex: r, moduleIndex: m, featureIndex: f });
-        // Free-tier per-minute token limit → wait for the window to reset, retry once.
-        if (!ex?.ok && /rate|tokens per minute|too large|limit/i.test(ex?.error.message ?? "")) {
-          await sleep(15000);
+        let attempts = 0;
+        while (
+          !ex?.ok &&
+          /rate|tokens per minute|429|too large|limit/i.test(ex?.error.message ?? "") &&
+          attempts < 2
+        ) {
+          attempts++;
+          await sleep(60000); // wait a full per-minute window, then retry
           ex = await expandImportTask({ jobId: jid, roadmapIndex: r, moduleIndex: m, featureIndex: f });
         }
         if (ex?.ok && (ex.data.checklist?.length ?? 0) > 0) {
           analysis = structuredClone(analysis);
           analysis.roadmaps[r].modules[m].features[f].checklist = ex.data.checklist as ChecklistItem[];
           setAnalysis(analysis);
+        } else {
+          failed++;
         }
         setExpandDone(i + 1);
-        await sleep(600); // gentle pacing for the free tier
+        if (i < refs.length - 1) await sleep(PACE_MS);
+      }
+      if (failed > 0) {
+        toast(`${failed} area belum sempat diperinci (batas AI gratis) — bisa impor ulang nanti.`);
       }
       setPhase("preview");
     } catch {

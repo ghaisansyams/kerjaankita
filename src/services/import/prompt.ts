@@ -25,13 +25,23 @@ export function buildImportSystemPrompt(): string {
     "If the same area appears under several roles, keep ONE feature and list ALL of",
     "those roles in `roles`.",
     "",
-    "Leave `checklist` EMPTY — the sub-modules and their actions are added later.",
+    "For EACH feature, list its SUB-MODULES (the SECOND-row boxes directly under the",
+    "area) as `checklist` items — NAMES ONLY, do NOT add `children` (the leaf actions",
+    "are filled in later). Examples:",
+    "  'Management User' → 'Management User Super Admin', 'Management User Admin Client',",
+    "     'Management User Admin Mitra', 'Management User Secretary Client', … ;",
+    "  'Management Master Data' → 'Management Floor', 'Management Room', 'Management",
+    "     Layout Room', 'Managemen Devision', 'Management Kategori Makanan', … ;",
+    "  'Setting' → 'Management Marge Room', 'Layout Display Setting', 'Management Room",
+    "     Facilities', 'Menu Access Settings', 'Display Setting', 'K-Kios Setting', … .",
+    "List EVERY sub-module. If an area has no sub-modules (only leaf boxes, e.g.",
+    "'Login/Logout' → 'Login With…', 'Session Login'…), list those leaves instead.",
     "",
     "Rules:",
-    "- Use the document's OWN labels verbatim for area names — never invent generic",
-    "  names like 'Create User' or 'Manage X'.",
-    "- Scan EVERY role's pages so no area is missed; dedupe an area that repeats across",
-    "  roles into ONE feature (collecting all its roles).",
+    "- Use the document's OWN labels verbatim — never invent generic names like",
+    "  'Create User' or 'Manage X'.",
+    "- Scan EVERY role's pages so no area/sub-module is missed; dedupe an area that",
+    "  repeats across roles into ONE feature (collecting all its roles).",
     "- Also fill top-level `roles` with the full list of distinct roles found.",
     "- Confidence per level; never invent content.",
   ].join("\n");
@@ -42,26 +52,64 @@ export function buildExpandSystemPrompt(): string {
   return [
     "You expand ONE area of a software-spec flowchart into a COMPLETE nested checklist.",
     "",
-    "- The area's sub-modules are the SECOND-row boxes under it. EACH sub-module becomes",
-    "  one checklist item.",
+    "- Each SUB-MODULE becomes ONE checklist item. A sub-module is a SECOND-row box —",
+    "  it has leaf actions beneath it; it is NOT a leaf itself.",
     "- Under each sub-module, list ALL of its leaf actions (the WHITE boxes: List,",
     "  Detail, Add, Edit, Delete, Import, Download, Preview, Setting, Send…, Order…,",
     "  Activate…, etc.) as `children`, copied verbatim.",
-    "- If a sub-module is itself a leaf (nothing beneath it), return it as an item with",
-    "  an empty `children` list. Do NOT invent children that aren't in the document.",
-    "- Include EVERY sub-module and EVERY leaf for this area — do not stop early or",
-    "  summarise. If the area repeats across roles with the same sub-modules, list once.",
+    "- Expand EVERY sub-module named in the request AND any others you find in the",
+    "  document. NEVER merge several sub-modules into one item's children.",
+    "- If a sub-module truly has no leaves in the document, keep it as an item with an",
+    "  empty `children` list. Do NOT invent children that aren't there.",
+    "- Do not stop early or summarise; list every sub-module and every leaf.",
   ].join("\n");
 }
 
-export function buildExpandUserPrompt(areaName: string, docText: string): string {
-  const body = docText ? `\n\nDOCUMENT:\n${compactText(docText).slice(0, 120_000)}` : "";
+export function buildExpandUserPrompt(areaName: string, subModules: string[], docText: string): string {
+  const slice = docText ? sliceDocForArea(docText, areaName) : "";
+  const known = subModules.filter((s) => s && s.trim()).slice(0, 60);
+  const hint = known.length
+    ? `\n\nKnown sub-modules of "${areaName}" — expand EACH as its own checklist item (and add any others you find): ${known.join(", ")}.`
+    : "";
+  const body = slice ? `\n\nDOCUMENT (relevant excerpt):\n${slice}` : "";
   return (
-    `Expand the area "${areaName}" COMPLETELY from the document below. ` +
-    `List every sub-module of "${areaName}" as a checklist item, and every leaf ` +
-    `action under each sub-module as its children.` +
+    `Expand the area "${areaName}" COMPLETELY. List every sub-module as a checklist ` +
+    `item, and every leaf action under each sub-module as its children.` +
+    hint +
     body
   );
+}
+
+/**
+ * Keep only the lines relevant to one area — from each mention of the area (or a
+ * fragment of its name) plus a window of following lines. Shrinks a per-area
+ * expand request a lot (cheaper against the token budget) and sharpens accuracy.
+ * Falls back to the whole compacted document if nothing matches.
+ */
+export function sliceDocForArea(raw: string, areaName: string): string {
+  const compact = compactText(raw);
+  const lines = compact.split("\n");
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const target = norm(areaName);
+  const WINDOW = 45;
+  const keep = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    const ln = norm(lines[i]);
+    if (ln.length < 3) continue;
+    if (ln.includes(target) || (target.includes(ln) && ln.split(" ").length >= 1)) {
+      for (let k = i; k < Math.min(lines.length, i + WINDOW); k++) keep.add(k);
+    }
+  }
+  if (keep.size === 0) return compact.slice(0, 120_000);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const i of [...keep].sort((a, b) => a - b)) {
+    const key = norm(lines[i]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(lines[i]);
+  }
+  return out.join("\n").slice(0, 120_000);
 }
 
 export function buildImportUserPrompt(parsed: ParsedDocument): string {

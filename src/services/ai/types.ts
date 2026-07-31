@@ -14,6 +14,9 @@ export type AnalyzeRequest = {
   documentText?: string;
   /** Raw PDF bytes (base64) — providers with native PDF vision read this. */
   pdfBase64?: string;
+  /** Output cap for THIS call. Reserved against per-minute token budgets, so
+   *  keep it just above the expected output. Falls back to the provider default. */
+  maxTokens?: number;
 };
 
 /** Thrown when no provider is configured (e.g. ANTHROPIC_API_KEY missing). */
