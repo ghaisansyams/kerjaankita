@@ -1,62 +1,48 @@
-import { CheckCircle2 } from "lucide-react";
-import { Brand } from "@/components/brand";
+import { AuthCard } from "@/features/auth/components/auth-card";
 
-const highlights = [
-  "See what every developer is working on — today and tomorrow.",
-  "Clients watch real progress instead of asking on WhatsApp.",
-  "Know instantly if a project is on track, at risk, or delayed.",
-];
-
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Brand / value panel */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-slate-950 p-10 text-slate-100 lg:flex">
+    <div
+      className="dark relative flex min-h-screen items-center justify-center overflow-hidden p-6 text-foreground"
+      style={{
+        background:
+          "radial-gradient(ellipse 90% 70% at 50% -10%, #1b1b42 0%, #0d0d22 46%, #050510 100%)",
+      }}
+    >
+      {/* depth — floating light */}
+      <div aria-hidden className="pointer-events-none absolute -left-24 -top-28 size-[34rem] rounded-full bg-indigo-600/25 blur-[130px]" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-32 -right-10 size-[30rem] rounded-full bg-violet-600/20 blur-[130px]" />
+      <div aria-hidden className="pointer-events-none absolute right-1/4 top-8 size-[18rem] rounded-full bg-blue-500/15 blur-[110px]" />
+
+      {/* 3D perspective grid floor */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[42vh] [perspective:900px]">
         <div
-          aria-hidden
-          className="pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-indigo-600/30 blur-3xl"
+          className="absolute inset-0 origin-bottom [transform:rotateX(72deg)]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(129,140,248,0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(129,140,248,0.35) 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+            maskImage: "linear-gradient(to top, #000, transparent 75%)",
+            WebkitMaskImage: "linear-gradient(to top, #000, transparent 75%)",
+            opacity: 0.5,
+          }}
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-32 right-0 size-96 rounded-full bg-blue-600/20 blur-3xl"
-        />
-
-        <div className="relative">
-          <Brand className="[&_span]:text-white" />
-        </div>
-
-        <div className="relative space-y-8">
-          <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-tight">
-            One workspace for your whole delivery team.
-          </h2>
-          <ul className="space-y-3.5">
-            {highlights.map((line) => (
-              <li key={line} className="flex items-start gap-3 text-slate-300">
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-indigo-400" />
-                <span className="text-sm leading-relaxed">{line}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="relative text-xs text-slate-500">
-          KerjaanKita — project management for IT consultancies.
-        </p>
       </div>
 
-      {/* Form panel */}
-      <div className="flex flex-col items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <Brand />
-          </div>
-          {children}
-        </div>
+      {/* vignette */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(ellipse at center, transparent 45%, rgba(3,3,10,0.55) 100%)" }}
+      />
+
+      <div className="relative z-10 flex w-full justify-center">
+        <AuthCard>{children}</AuthCard>
       </div>
+
+      <p className="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs text-white/30">
+        KerjaanKita — project management for IT consultancies.
+      </p>
     </div>
   );
 }
