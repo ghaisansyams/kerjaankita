@@ -11,6 +11,7 @@ import {
   aiImportStatus,
   analyzeImportDocument,
   commitAiImport,
+  expandImportTask,
   requestAiImportUpload,
 } from "../ai-actions";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ type Feat = {
   description?: string;
   checklist: ChecklistItem[];
   acceptanceCriteria?: string[];
+  roles?: string[];
   imageRefs?: number[];
   confidence: Confidence;
 };
@@ -52,10 +54,12 @@ type Analysis = {
   summary?: string;
   roadmaps: Roadmap[];
 };
-type Phase = "checking" | "disabled" | "upload" | "analyzing" | "preview" | "committing";
+type Phase = "checking" | "disabled" | "upload" | "analyzing" | "expanding" | "preview" | "committing";
 
 const ACCEPT = ".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const MAX_BYTES = 25 * 1024 * 1024;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function ConfBadge({ c }: { c: Confidence }) {
   const map: Record<Confidence, string> = {
@@ -87,6 +91,8 @@ export function AiImportDialog({
   const [dupStrategy, setDupStrategy] = useState<"skip" | "merge" | "duplicate">("duplicate");
   const [target, setTarget] = useState<"existing" | "new">(targetProjectId ? "existing" : "new");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expandDone, setExpandDone] = useState(0);
+  const [expandTotal, setExpandTotal] = useState(0);
 
   async function openDialog() {
     setOpen(true);
@@ -103,6 +109,8 @@ export function AiImportDialog({
     setProjectName("");
     setDupStrategy("duplicate");
     setTarget(targetProjectId ? "existing" : "new");
+    setExpandDone(0);
+    setExpandTotal(0);
   }
   function close() {
     setOpen(false);
@@ -144,9 +152,37 @@ export function AiImportDialog({
         }
         return;
       }
-      setJobId(res.data.jobId);
-      setAnalysis(res.data.analysis as Analysis);
+      const jid = res.data.jobId;
+      setJobId(jid);
+      let analysis = res.data.analysis as Analysis;
+      setAnalysis(analysis);
       setImages((res.data.images ?? []).map((i) => ({ index: i.index, previewUrl: i.previewUrl })));
+
+      // PASS 2: expand every area into a COMPLETE nested checklist, one focused
+      // call each so the model lists every sub-module and leaf.
+      const refs: { r: number; m: number; f: number }[] = [];
+      analysis.roadmaps.forEach((rm, r) =>
+        rm.modules.forEach((mod, m) => mod.features.forEach((_, f) => refs.push({ r, m, f }))),
+      );
+      setExpandTotal(refs.length);
+      setExpandDone(0);
+      setPhase("expanding");
+      for (let i = 0; i < refs.length; i++) {
+        const { r, m, f } = refs[i];
+        let ex = await expandImportTask({ jobId: jid, roadmapIndex: r, moduleIndex: m, featureIndex: f });
+        // Free-tier per-minute token limit → wait for the window to reset, retry once.
+        if (!ex?.ok && /rate|tokens per minute|too large|limit/i.test(ex?.error.message ?? "")) {
+          await sleep(15000);
+          ex = await expandImportTask({ jobId: jid, roadmapIndex: r, moduleIndex: m, featureIndex: f });
+        }
+        if (ex?.ok && (ex.data.checklist?.length ?? 0) > 0) {
+          analysis = structuredClone(analysis);
+          analysis.roadmaps[r].modules[m].features[f].checklist = ex.data.checklist as ChecklistItem[];
+          setAnalysis(analysis);
+        }
+        setExpandDone(i + 1);
+        await sleep(600); // gentle pacing for the free tier
+      }
       setPhase("preview");
     } catch {
       setPhase("upload");
@@ -261,7 +297,29 @@ export function AiImportDialog({
           {phase === "analyzing" && (
             <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
               <Loader2 className="size-8 animate-spin" />
-              AI sedang membaca “{fileName}”… (bisa sampai ~1 menit untuk dokumen besar)
+              AI membaca struktur “{fileName}”…
+            </div>
+          )}
+
+          {phase === "expanding" && (
+            <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
+              <Loader2 className="size-8 animate-spin" />
+              <div className="font-medium text-foreground">Memperinci setiap area jadi checklist lengkap…</div>
+              <div className="w-full max-w-xs space-y-1">
+                <div className="flex justify-between text-xs tabular-nums">
+                  <span>{expandDone}/{expandTotal} area</span>
+                  <span>{expandTotal ? Math.round((expandDone / expandTotal) * 100) : 0}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${expandTotal ? (expandDone / expandTotal) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className="max-w-xs text-center text-xs">
+                Dokumen besar bisa perlu beberapa menit (batas AI gratis). Jangan tutup dialog ini.
+              </div>
             </div>
           )}
 
@@ -358,6 +416,19 @@ export function AiImportDialog({
                                       <Trash2 className="size-3.5" />
                                     </Button>
                                   </div>
+                                  {f.roles && f.roles.length > 0 && (
+                                    <div className="ml-6 mt-1 flex flex-wrap items-center gap-1">
+                                      <span className="text-[10px] font-medium text-muted-foreground">Hak akses:</span>
+                                      {f.roles.map((role, rri) => (
+                                        <span
+                                          key={rri}
+                                          className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400"
+                                        >
+                                          {role}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                   {expanded[k] && f.checklist.length > 0 && (
                                     <ul className="ml-6 mt-1.5 space-y-1">
                                       {f.checklist.map((c, ci) => (
@@ -412,7 +483,7 @@ export function AiImportDialog({
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" onClick={close} disabled={phase === "analyzing"}>Tutup</Button>
+              <Button variant="ghost" onClick={close} disabled={phase === "analyzing" || phase === "expanding"}>Tutup</Button>
             )}
           </DialogFooter>
         </DialogContent>

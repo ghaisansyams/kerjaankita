@@ -22,12 +22,13 @@ export type BoardTask = {
   comments: number;
   roadmap_id: string | null;
   module_id: string | null;
+  access_roles: string[];
 };
 
 /** Task columns the board query selects (base fields; counts fetched separately). */
 export const BOARD_TASK_SELECT = `
   id, number, title, status_id, priority, assignee_id, due_date, progress, is_blocked, position, estimated_hours,
-  roadmap_id, module_id,
+  roadmap_id, module_id, access_roles,
   assignee:profiles!tasks_assignee_id_fkey(full_name, avatar_url)
 `;
 
@@ -45,6 +46,7 @@ export type RawBoardTask = {
   estimated_hours: number | null;
   roadmap_id: string | null;
   module_id: string | null;
+  access_roles: string[] | null;
   assignee: { full_name: string | null; avatar_url: string | null } | null;
 };
 
@@ -89,5 +91,6 @@ export function assembleBoard(
     comments: com.get(t.id) ?? 0,
     roadmap_id: t.roadmap_id,
     module_id: t.module_id,
+    access_roles: t.access_roles ?? [],
   }));
 }

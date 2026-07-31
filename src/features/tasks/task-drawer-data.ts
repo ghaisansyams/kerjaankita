@@ -84,6 +84,7 @@ export async function buildTaskDrawerData(
     productionUrl: task.production_url,
     evidenceNotes: task.evidence_notes,
     statusCategory: (task.status?.category ?? "todo") as StatusCategory,
+    accessRoles: task.access_roles ?? [],
   };
 
   return {

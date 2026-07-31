@@ -86,6 +86,23 @@ export function KanbanCardBody({
       {/* title */}
       <p className="line-clamp-2 pr-6 text-sm font-medium leading-snug text-foreground">{task.title}</p>
 
+      {/* Hak Akses: which roles can access this area */}
+      {task.access_roles.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {task.access_roles.slice(0, 3).map((r, i) => (
+            <span
+              key={i}
+              className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-medium leading-none text-indigo-600 dark:text-indigo-400"
+            >
+              {r.replace(/\s*\(.*?\)\s*/g, "")}
+            </span>
+          ))}
+          {task.access_roles.length > 3 && (
+            <span className="text-[9px] text-muted-foreground">+{task.access_roles.length - 3}</span>
+          )}
+        </div>
+      )}
+
       {/* meta: assignee + due + est  |  progress ring */}
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">

@@ -1,50 +1,67 @@
 import "server-only";
 import type { ParsedDocument } from "./parsers";
 
+// PASS 1 — extract only the TOP-LEVEL structure (areas + Hak Akses). The heavy
+// per-area detail (sub-modules + CRUD leaves) is expanded separately in pass 2,
+// which keeps each request small enough for the model to be exhaustive.
 export function buildImportSystemPrompt(): string {
   return [
-    "You are an expert software business analyst. You read a software specification",
-    "document (SRS, feature/functional spec, scope, client requirements, meeting",
-    "minutes, a progress report, or a role → module → feature FLOWCHART) and",
-    "reverse-engineer its structure into a clean, board-ready project plan.",
+    "You are an expert software business analyst. You read a spec or a role → module",
+    "→ feature FLOWCHART and extract only its TOP-LEVEL STRUCTURE (details are",
+    "expanded in a later step).",
     "",
-    "Map the document into this hierarchy:",
-    "  1. Roadmap  — a high-level delivery track/phase. If the document is one system",
-    "                with no explicit phases, create a FEW logical tracks (e.g.",
-    "                'Autentikasi & Dashboard', 'Manajemen User', 'Master Data &",
-    "                Setting', 'Booking & Meeting', 'Laporan & Log') or a single",
-    "                'Delivery' roadmap.",
-    "  2. Module   — a functional group of related areas inside a roadmap.",
-    "  3. Feature  — a MAJOR area / screen-group. EACH becomes exactly ONE board task",
-    "                (card). In a flowchart this is the TOP box of a column, e.g.",
-    "                'Login/Logout', 'Dashboard', 'Management User', 'Management Master",
-    "                Data', 'Setting', 'Booking Room'.",
-    "  4. Checklist— the items DIRECTLY beneath that area become its checklist items.",
-    "                In a flowchart these are the SECOND-row boxes, e.g. under",
-    "                'Management User': 'Management User Super Admin', 'Management User",
-    "                Admin Client'…; under 'Management Master Data': 'Management Floor',",
-    "                'Management Room'…",
-    "  5. children — if a checklist item has its own leaf actions, list them in that",
-    "                item's `children` (ONE level deep only). In a flowchart these are",
-    "                the WHITE leaf boxes, e.g. under 'Management User Super Admin':",
-    "                'List User Super Admin', 'Detail User Super Admin', 'Add User",
-    "                Super Admin', 'Edit…', 'Delete…'. If an area's items are already",
-    "                leaves (e.g. 'Login/Logout' → 'Login With…', 'Session Login'…),",
-    "                they are checklist items with NO children.",
+    "Produce:",
+    "  1. Roadmap — a few high-level tracks (e.g. 'Autentikasi & Dashboard', 'Manajemen",
+    "               User', 'Master Data & Setting', 'Booking & Meeting', 'Laporan &",
+    "               Log'), or a single 'Delivery' roadmap.",
+    "  2. Module  — a functional group of related areas inside a roadmap.",
+    "  3. Feature — each MAJOR area / TOP box becomes exactly ONE board task, e.g.",
+    "               'Login/Logout', 'Dashboard', 'Management User', 'Management Master",
+    "               Data', 'Setting', 'Booking Room', 'Report & Log'.",
+    "",
+    "For EVERY feature, set `roles` = the HAK AKSES: each role whose section contains",
+    "that area, WITH its platform in parentheses — e.g. 'Super Admin (WEB)', 'Admin",
+    "Client (WEB)', 'Secretary Client (WEB & APP)', 'Employee (APP)', 'Guest (WEB)'.",
+    "If the same area appears under several roles, keep ONE feature and list ALL of",
+    "those roles in `roles`.",
+    "",
+    "Leave `checklist` EMPTY — the sub-modules and their actions are added later.",
     "",
     "Rules:",
-    "- BE FAITHFUL AND COMPLETE. Use the document's OWN labels verbatim as names. Do",
-    "  NOT invent generic names like 'Create User' or 'Manage X' — copy the real box",
-    "  text. Capture EVERY distinct area, sub-module and leaf action; never summarise",
-    "  them away or drop the CRUD leaves.",
-    "- Detect distinct user Roles and list them (Super Admin, Admin, Client…).",
-    "- If a role-access matrix repeats the same area across many roles, DEDUPE into ONE",
-    "  task and note the roles in its description — do not repeat the area per role.",
-    "- Recognise numbered/bullet/checkbox lists and flowchart columns & arrows.",
-    "- Map any '[IMAGE n]' / '[TABLE n]' markers to the feature via imageRefs/tableRefs.",
-    "- Give every level a confidence score (high/medium/low); mark uncertain parsing low.",
-    "- Never invent content that is not supported by the document.",
+    "- Use the document's OWN labels verbatim for area names — never invent generic",
+    "  names like 'Create User' or 'Manage X'.",
+    "- Scan EVERY role's pages so no area is missed; dedupe an area that repeats across",
+    "  roles into ONE feature (collecting all its roles).",
+    "- Also fill top-level `roles` with the full list of distinct roles found.",
+    "- Confidence per level; never invent content.",
   ].join("\n");
+}
+
+// PASS 2 — expand ONE area into a COMPLETE nested checklist.
+export function buildExpandSystemPrompt(): string {
+  return [
+    "You expand ONE area of a software-spec flowchart into a COMPLETE nested checklist.",
+    "",
+    "- The area's sub-modules are the SECOND-row boxes under it. EACH sub-module becomes",
+    "  one checklist item.",
+    "- Under each sub-module, list ALL of its leaf actions (the WHITE boxes: List,",
+    "  Detail, Add, Edit, Delete, Import, Download, Preview, Setting, Send…, Order…,",
+    "  Activate…, etc.) as `children`, copied verbatim.",
+    "- If a sub-module is itself a leaf (nothing beneath it), return it as an item with",
+    "  an empty `children` list. Do NOT invent children that aren't in the document.",
+    "- Include EVERY sub-module and EVERY leaf for this area — do not stop early or",
+    "  summarise. If the area repeats across roles with the same sub-modules, list once.",
+  ].join("\n");
+}
+
+export function buildExpandUserPrompt(areaName: string, docText: string): string {
+  const body = docText ? `\n\nDOCUMENT:\n${compactText(docText).slice(0, 120_000)}` : "";
+  return (
+    `Expand the area "${areaName}" COMPLETELY from the document below. ` +
+    `List every sub-module of "${areaName}" as a checklist item, and every leaf ` +
+    `action under each sub-module as its children.` +
+    body
+  );
 }
 
 export function buildImportUserPrompt(parsed: ParsedDocument): string {

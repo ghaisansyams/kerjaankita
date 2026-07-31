@@ -2525,6 +2525,7 @@ export type Database = {
           staging_url: string | null;
           production_url: string | null;
           evidence_notes: string | null;
+          access_roles: string[];
         };
         Insert: {
           id?: string;
@@ -2562,6 +2563,7 @@ export type Database = {
           staging_url?: string | null;
           production_url?: string | null;
           evidence_notes?: string | null;
+          access_roles?: string[];
         };
         Update: {
           id?: string;
@@ -2599,6 +2601,7 @@ export type Database = {
           staging_url?: string | null;
           production_url?: string | null;
           evidence_notes?: string | null;
+          access_roles?: string[];
         };
         Relationships: [
           {

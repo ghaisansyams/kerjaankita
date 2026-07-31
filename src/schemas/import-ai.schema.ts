@@ -22,7 +22,10 @@ export const aiFeatureSchema = z.object({
   name: z.string().trim().min(1).max(300),
   description: z.string().max(3000).optional().default(""),
   acceptanceCriteria: z.array(z.string().max(500)).max(60).optional().default([]),
-  checklist: z.array(aiChecklistItemSchema).max(300).optional().default([]),
+  checklist: z.array(aiChecklistItemSchema).max(400).optional().default([]),
+  // Hak Akses: which roles (optionally with platform, e.g. "Super Admin (WEB)")
+  // can access this area. Lets the same area appear once but show every role.
+  roles: z.array(z.string().trim().max(120)).max(30).optional().default([]),
   imageRefs: z.array(z.number().int().nonnegative()).max(80).optional().default([]),
   tableRefs: z.array(z.number().int().nonnegative()).max(80).optional().default([]),
   confidence: z.enum(CONFIDENCE).catch("medium"),
@@ -120,6 +123,12 @@ export const AI_ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
                           required: ["text"],
                         },
                       },
+                      roles: {
+                        type: "array",
+                        items: { type: "string" },
+                        description:
+                          "Hak Akses: every role whose section contains this area, WITH platform in parentheses, e.g. 'Super Admin (WEB)', 'Secretary Client (WEB & APP)', 'Employee (APP)'.",
+                      },
                       imageRefs: {
                         type: "array",
                         items: { type: "integer" },
@@ -142,6 +151,45 @@ export const AI_ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
   },
   required: ["roadmaps"],
 };
+
+// ---------------------------------------------------------------------------
+// Pass 2 — expand ONE area's sub-modules into complete nested checklists. Kept
+// small and focused so the model reliably lists EVERY sub-module and leaf.
+// ---------------------------------------------------------------------------
+export const AI_EXPAND_TOOL_NAME = "emit_checklist";
+export const aiExpandSchema = z.object({
+  checklist: z.array(aiChecklistItemSchema).max(400).optional().default([]),
+});
+export const AI_EXPAND_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    checklist: {
+      type: "array",
+      description: "Every sub-module of the area as a checklist item, each with its leaf actions as `children`.",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          confidence: conf,
+          children: {
+            type: "array",
+            description: "Every leaf action under this sub-module (List/Detail/Add/Edit/Delete …).",
+            items: { type: "object", properties: { text: { type: "string" }, confidence: conf }, required: ["text"] },
+          },
+        },
+        required: ["text"],
+      },
+    },
+  },
+  required: ["checklist"],
+};
+
+export const expandImportTaskSchema = z.object({
+  jobId: z.string().uuid(),
+  roadmapIndex: z.number().int().nonnegative(),
+  moduleIndex: z.number().int().nonnegative(),
+  featureIndex: z.number().int().nonnegative(),
+});
 
 // ---------------------------------------------------------------------------
 // Actions I/O

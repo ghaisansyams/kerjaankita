@@ -66,6 +66,7 @@ export type TaskDetailVM = {
   productionUrl: string | null;
   evidenceNotes: string | null;
   statusCategory: StatusCategory;
+  accessRoles: string[];
 };
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -269,6 +270,22 @@ export function TaskDrawer({
                   <div className="space-y-1.5">
                     <h3 className="text-sm font-medium">Description</h3>
                     <p className="whitespace-pre-wrap text-sm text-muted-foreground">{task.description}</p>
+                  </div>
+                )}
+
+                {task.accessRoles.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-sm font-medium">Hak Akses</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {task.accessRoles.map((role) => (
+                        <span
+                          key={role}
+                          className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400"
+                        >
+                          {role}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
 

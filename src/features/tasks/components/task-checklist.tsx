@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   addChecklistItem,
@@ -29,15 +29,37 @@ export function TaskChecklist({
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [, startTransition] = useTransition();
 
   const doneCount = items.filter((i) => i.isDone).length;
+
+  // Group the flat, depth-tagged list into parents + their sub-items so long
+  // checklists (e.g. an imported area with many sub-modules) can collapse.
+  const groups = useMemo(() => {
+    const g: { parent: ChecklistItemVM; children: ChecklistItemVM[] }[] = [];
+    for (const it of items) {
+      if ((it.depth ?? 0) === 0 || g.length === 0) g.push({ parent: it, children: [] });
+      else g[g.length - 1].children.push(it);
+    }
+    return g;
+  }, [items]);
+  const hasNesting = groups.some((gr) => gr.children.length > 0);
+  const allOpen = hasNesting && groups.every((gr) => gr.children.length === 0 || open[gr.parent.id]);
+
+  function setAllOpen(v: boolean) {
+    const next: Record<string, boolean> = {};
+    groups.forEach((gr) => {
+      if (gr.children.length) next[gr.parent.id] = v;
+    });
+    setOpen(next);
+  }
 
   function add() {
     const content = draft.trim();
     if (!content) return;
     const tempId = crypto.randomUUID();
-    setItems((prev) => [...prev, { id: tempId, content, isDone: false }]);
+    setItems((prev) => [...prev, { id: tempId, content, isDone: false, depth: 0 }]);
     setDraft("");
     startTransition(async () => {
       const r = await addChecklistItem({ taskId, content });
@@ -88,74 +110,120 @@ export function TaskChecklist({
     });
   }
 
+  function itemBody(item: ChecklistItemVM) {
+    return (
+      <>
+        <Checkbox
+          checked={item.isDone}
+          onCheckedChange={() => canEdit && toggle(item)}
+          disabled={!canEdit}
+          aria-label={item.content}
+        />
+        {editingId === item.id ? (
+          <Input
+            autoFocus
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => saveEdit(item)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit(item);
+              if (e.key === "Escape") setEditingId(null);
+            }}
+            className="h-7"
+          />
+        ) : (
+          <span
+            className={cn(
+              "flex-1 text-sm",
+              item.isDone && "text-muted-foreground line-through",
+              canEdit && "cursor-text",
+            )}
+            onClick={() => {
+              if (canEdit) {
+                setEditingId(item.id);
+                setEditValue(item.content);
+              }
+            }}
+          >
+            {item.content}
+          </span>
+        )}
+        {canEdit && editingId !== item.id && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 opacity-0 group-hover:opacity-100"
+            aria-label={`Delete ${item.content}`}
+            onClick={() => remove(item)}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Checklist</h3>
-        {items.length > 0 && (
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {doneCount}/{items.length}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {hasNesting && (
+            <button
+              type="button"
+              onClick={() => setAllOpen(!allOpen)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {allOpen ? "Tutup semua" : "Buka semua"}
+            </button>
+          )}
+          {items.length > 0 && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {doneCount}/{items.length}
+            </span>
+          )}
+        </div>
       </div>
 
       <ul className="space-y-1">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className={cn(
-              "group flex items-center gap-2",
-              (item.depth ?? 0) > 0 && "ml-6 border-l pl-3",
-            )}
-          >
-            <Checkbox
-              checked={item.isDone}
-              onCheckedChange={() => canEdit && toggle(item)}
-              disabled={!canEdit}
-              aria-label={item.content}
-            />
-            {editingId === item.id ? (
-              <Input
-                autoFocus
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={() => saveEdit(item)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveEdit(item);
-                  if (e.key === "Escape") setEditingId(null);
-                }}
-                className="h-7"
-              />
-            ) : (
-              <span
-                className={cn(
-                  "flex-1 text-sm",
-                  item.isDone && "text-muted-foreground line-through",
-                  canEdit && "cursor-text",
+        {groups.map((gr) => {
+          const hasChildren = gr.children.length > 0;
+          const isOpen = !!open[gr.parent.id];
+          const childDone = gr.children.filter((c) => c.isDone).length;
+          return (
+            <li key={gr.parent.id} className="list-none">
+              <div className="group flex items-center gap-1.5">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpen((o) => ({ ...o, [gr.parent.id]: !o[gr.parent.id] }))}
+                    aria-label={isOpen ? "Collapse" : "Expand"}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
+                  </button>
+                ) : (
+                  <span className="w-3.5 shrink-0" />
                 )}
-                onClick={() => {
-                  if (canEdit) {
-                    setEditingId(item.id);
-                    setEditValue(item.content);
-                  }
-                }}
-              >
-                {item.content}
-              </span>
-            )}
-            {canEdit && editingId !== item.id && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 opacity-0 group-hover:opacity-100"
-                aria-label={`Delete ${item.content}`}
-                onClick={() => remove(item)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            )}
-          </li>
-        ))}
+                {itemBody(gr.parent)}
+                {hasChildren && (
+                  <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                    {childDone}/{gr.children.length}
+                  </span>
+                )}
+              </div>
+              {hasChildren && isOpen && (
+                <ul className="mt-1 space-y-1">
+                  {gr.children.map((ch) => (
+                    <li key={ch.id} className="group flex items-center gap-2 ml-6 border-l pl-3">
+                      {itemBody(ch)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {canEdit && (

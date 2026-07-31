@@ -10,13 +10,23 @@ import * as plan from "@/repositories/import-planning.repository";
 import { getParser } from "@/services/import/parsers";
 import { getAiProvider, aiImportEnabled, registeredProviders } from "@/services/ai";
 import { getOpenAICompatibleUsage, type AiUsage } from "@/services/ai/usage";
-import { buildImportSystemPrompt, buildImportUserPrompt } from "@/services/import/prompt";
+import {
+  buildImportSystemPrompt,
+  buildImportUserPrompt,
+  buildExpandSystemPrompt,
+  buildExpandUserPrompt,
+  compactText,
+} from "@/services/import/prompt";
 import {
   AI_ANALYSIS_JSON_SCHEMA,
   AI_ANALYSIS_TOOL_NAME,
+  AI_EXPAND_JSON_SCHEMA,
+  AI_EXPAND_TOOL_NAME,
   aiAnalysisSchema,
+  aiExpandSchema,
   analyzeImportSchema,
   commitAiImportSchema,
+  expandImportTaskSchema,
   importJobIdSchema,
 } from "@/schemas/import-ai.schema";
 import { toFieldErrors } from "@/lib/validation";
@@ -157,11 +167,13 @@ export async function analyzeImportDocument(input: unknown): Promise<
     const analysis = val.data;
 
     await admin.storage.from(bucket).remove([path]); // temp source no longer needed
+    // Keep the compacted text so pass 2 can expand each area without re-parsing.
+    const documentText = doc.text ? compactText(doc.text).slice(0, 120_000) : "";
     await plan.updateImportJob(jobId, {
       status: "preview",
       document_type: analysis.documentType,
       confidence: analysis.overallConfidence,
-      result: { analysis, images },
+      result: { analysis, images, documentText },
     });
     return actionOk({ jobId, analysis, images });
   } catch (e) {
@@ -186,6 +198,47 @@ export async function getImportJob(input: unknown): Promise<
     error: (row.error as string | null) ?? null,
     result: row.result ?? null,
   });
+}
+
+/** Pass 2: expand ONE area (feature) into a COMPLETE nested checklist. Runs once
+ *  per area, keeping each request small so the model lists every sub-module/leaf. */
+export async function expandImportTask(
+  input: unknown,
+): Promise<ActionResult<{ checklist: unknown[] }>> {
+  const ctx = await requireOrgContext();
+  const parsed = expandImportTaskSchema.safeParse(input);
+  if (!parsed.success) return actionError("VALIDATION", "Invalid request.");
+  const { jobId, roadmapIndex, moduleIndex, featureIndex } = parsed.data;
+
+  const provider = getAiProvider();
+  if (!provider) return actionError("NOT_CONFIGURED", "AI import isn't active.");
+
+  const job = await plan.getImportJobRow(jobId);
+  if (!job || (job as { organization_id?: string }).organization_id !== ctx.organization.id) {
+    return actionError("NOT_FOUND", "Import job not found.");
+  }
+  const result = (job.result ?? {}) as {
+    analysis?: { roadmaps?: Array<{ modules?: Array<{ features?: Array<{ name?: string }> }> }> };
+    documentText?: string;
+  };
+  const feature =
+    result.analysis?.roadmaps?.[roadmapIndex]?.modules?.[moduleIndex]?.features?.[featureIndex];
+  if (!feature?.name) return actionError("NOT_FOUND", "Area not found.");
+
+  try {
+    const raw = await provider.analyzeDocument({
+      fileName: "expand",
+      systemPrompt: buildExpandSystemPrompt(),
+      userPrompt: buildExpandUserPrompt(feature.name, result.documentText ?? ""),
+      jsonSchema: AI_EXPAND_JSON_SCHEMA,
+      toolName: AI_EXPAND_TOOL_NAME,
+    });
+    const val = aiExpandSchema.safeParse(raw);
+    if (!val.success) return actionError("INTERNAL", "Couldn't expand this area.");
+    return actionOk({ checklist: val.data.checklist });
+  } catch (e) {
+    return mapUnknownError(e);
+  }
 }
 
 /** Materialize the reviewed hierarchy: Project → Roadmaps → Modules →
@@ -241,7 +294,6 @@ export async function commitAiImport(
       (await plan.listTaskTitles(projectId)).map((t) => [t.title.trim().toLowerCase(), t.id]),
     );
 
-    const roleNote = analysis.roles.length ? `Roles: ${analysis.roles.join(", ")}.` : "";
     let roadmaps = 0;
     let modules = 0;
     let tasks = 0;
@@ -279,7 +331,7 @@ export async function commitAiImport(
           if (dup && duplicateStrategy === "skip") continue;
 
           // Compose a rich description (module context + acceptance criteria).
-          const descParts = [feat.description, roleNote].filter(Boolean);
+          const descParts = [feat.description].filter(Boolean);
           if (feat.acceptanceCriteria.length) {
             descParts.push("Acceptance criteria:\n" + feat.acceptanceCriteria.map((a) => `- ${a}`).join("\n"));
           }
@@ -299,6 +351,7 @@ export async function commitAiImport(
               status_id: targetStatus,
               roadmap_id: roadmapId,
               module_id: moduleId,
+              access_roles: feat.roles ?? [],
             });
             tasks++;
             existing.set(key, taskId);
