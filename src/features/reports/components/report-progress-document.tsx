@@ -24,7 +24,7 @@ const CSS = `
   .rp-doc table.frame { width: 100%; border-collapse: collapse; }
   .rp-doc table.frame > tbody > tr > td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
   .rp-doc .logo-cell { text-align: center; padding: 12px; }
-  .rp-doc .logo-cell img { max-height: 58px; max-width: 260px; object-fit: contain; display: block; margin: 0 auto; }
+  .rp-doc .logo-cell img { max-height: 104px; max-width: 130px; object-fit: contain; display: block; margin: 0 auto; }
   .rp-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
   .rp-doc .title-cell { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 50%; vertical-align: middle; }
   .rp-doc .meta { border-collapse: collapse; }

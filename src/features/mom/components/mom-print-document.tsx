@@ -14,13 +14,15 @@ function ddmmyyyy(iso: string) {
 }
 
 const CSS = `
-  @page { size: A4; margin: 16mm; }
-  .mom-doc { background:#fff; color:#000; font-family: Arial, Helvetica, "Segoe UI", sans-serif; max-width: 780px; margin: 0 auto; padding: 18px; font-size: 12px; line-height: 1.45; }
+  @page { size: A4; margin: 30mm 32mm; }
+  /* 552px = the 146mm content width left by the @page margins, so the
+     on-screen preview is the same width as the exported PDF. */
+  .mom-doc { background:#fff; color:#000; font-family: Arial, Helvetica, "Segoe UI", sans-serif; max-width: 552px; margin: 0 auto; padding: 18px; font-size: 12px; line-height: 1.45; }
   .mom-doc * { box-sizing: border-box; }
   .mom-doc table.frame { width: 100%; border-collapse: collapse; }
   .mom-doc table.frame > tbody > tr > td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
   .mom-doc .logo-cell { text-align: center; padding: 12px; }
-  .mom-doc .logo-cell img { max-height: 58px; max-width: 260px; object-fit: contain; display: block; margin: 0 auto; }
+  .mom-doc .logo-cell img { max-height: 104px; max-width: 130px; object-fit: contain; display: block; margin: 0 auto; }
   .mom-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
   .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 50%; vertical-align: middle; }
   .mom-doc .meta td.k { padding: 0; white-space: nowrap; }
