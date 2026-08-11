@@ -11,6 +11,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Server modules guard themselves with `server-only`, which throws
+      // outside a Next server bundle. Stub it so their pure logic is testable.
+      "server-only": fileURLToPath(
+        new URL("./src/services/jira/server-only-stub.ts", import.meta.url),
+      ),
     },
   },
 });

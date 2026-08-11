@@ -37,6 +37,7 @@ import { KanbanCardBody } from "./kanban-card";
 import { BoardDrawerHost } from "./board-drawer-host";
 import { AddColumn } from "./add-column";
 import { ImportTasksDialog } from "@/features/import/components/import-tasks-dialog";
+import { JiraImportDialog } from "@/features/import/components/jira-import-dialog";
 import { AiImportDialog } from "@/features/import/components/ai-import-dialog";
 import { DeleteColumnDialog, type DeleteTarget } from "./delete-column-dialog";
 import { RoadmapView } from "./roadmap-view";
@@ -456,6 +457,11 @@ export function KanbanBoard({
             {canCreate && (
               <>
                 <ImportTasksDialog
+                  projectId={projectId}
+                  statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+                  onDone={refetch}
+                />
+                <JiraImportDialog
                   projectId={projectId}
                   statuses={cols.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
                   onDone={refetch}
