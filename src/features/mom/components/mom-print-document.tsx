@@ -30,7 +30,10 @@ const CSS = `
   /* 57/43, matching the reference MOM. One table means one column split for
      every row, so this also sets Mengetahui | Distribusi and the signature
      row — a 50/50 split forced each participant onto two lines. */
-  .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 57%; vertical-align: middle; }
+  /* Selector has to out-specify the `td { vertical-align: top }` rule above,
+     otherwise MOM sits at the top of the cell instead of centred against the
+     Tanggal/Tempat/Waktu block beside it. */
+  .mom-doc table.frame > tbody > tr > td.mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 57%; vertical-align: middle; }
   .mom-doc .meta td.k { padding: 0; white-space: nowrap; }
   .mom-doc .meta { border-collapse: collapse; }
   .mom-doc .meta td { border: none !important; padding: 1px 0; }
