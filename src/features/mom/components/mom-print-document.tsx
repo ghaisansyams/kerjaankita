@@ -24,7 +24,10 @@ const CSS = `
   .mom-doc .logo-cell { text-align: center; padding: 12px; }
   .mom-doc .logo-cell img { max-height: 58px; max-width: 260px; object-fit: contain; display: block; margin: 0 auto; }
   .mom-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
-  .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 50%; vertical-align: middle; }
+  /* 57/43, matching the reference MOM. One table means one column split for
+     every row, so this also sets Mengetahui | Distribusi and the signature
+     row — a 50/50 split forced each participant onto two lines. */
+  .mom-doc .mom-title { text-align: center; font-weight: 700; font-size: 15px; letter-spacing: .06em; width: 57%; vertical-align: middle; }
   .mom-doc .meta td.k { padding: 0; white-space: nowrap; }
   .mom-doc .meta { border-collapse: collapse; }
   .mom-doc .meta td { border: none !important; padding: 1px 0; }
