@@ -348,30 +348,35 @@ export function ProjectForm({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="visibility"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Visibility</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PROJECT_VISIBILITIES.map((v) => (
-                        <SelectItem key={v} value={v}>
-                          {PROJECT_VISIBILITY_LABELS[v]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Nobody picks visibility while setting a project up — it's a
+                later decision. Create submits the "workspace" default silently
+                (same as the Workspace picker above) and Edit still exposes it. */}
+            {mode === "edit" && (
+              <FormField
+                control={form.control}
+                name="visibility"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Visibility</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PROJECT_VISIBILITIES.map((v) => (
+                          <SelectItem key={v} value={v}>
+                            {PROJECT_VISIBILITY_LABELS[v]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
