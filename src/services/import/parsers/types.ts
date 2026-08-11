@@ -15,7 +15,7 @@ export type ParsedTable = {
 };
 
 export type ParsedDocument = {
-  kind: "docx" | "pdf" | "xlsx";
+  kind: "docx" | "pdf" | "xlsx" | "csv";
   /** Plain text, with `[IMAGE n]` / `[TABLE n]` placeholders where known. */
   text: string;
   images: ParsedImage[];

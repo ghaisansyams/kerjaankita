@@ -34,8 +34,9 @@ import {
 type Status = { id: string; name: string; color: string | null };
 type Phase = "upload" | "parsing" | "review" | "committing";
 
+const IMPORT_EXTS = [".docx", ".pdf", ".xlsx", ".csv"];
 const ACCEPT =
-  ".docx,.pdf,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  ".docx,.pdf,.xlsx,.csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/csv";
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export function ImportTasksDialog({
@@ -67,8 +68,8 @@ export function ImportTasksDialog({
 
   async function onFile(file: File) {
     const lower = file.name.toLowerCase();
-    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf") && !lower.endsWith(".xlsx")) {
-      toast.error("Hanya file Word (.docx), PDF, atau Excel (.xlsx).");
+    if (!IMPORT_EXTS.some((e) => lower.endsWith(e))) {
+      toast.error("Hanya file Word (.docx), PDF, Excel (.xlsx), atau CSV.");
       return;
     }
     if (file.size > MAX_BYTES) {
@@ -162,19 +163,19 @@ export function ImportTasksDialog({
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Import task dari Word / PDF</DialogTitle>
+            <DialogTitle>Import task dari dokumen</DialogTitle>
             <DialogDescription>
-              Upload laporan progress (daftar bernomor + screenshot). Sistem otomatis memecahnya
-              jadi task di board, lengkap dengan gambarnya.
+              Upload laporan progress Word/PDF (daftar bernomor + screenshot), atau tabel
+              Excel/CSV — termasuk ekspor Jira. Sistem memecahnya jadi task di board.
             </DialogDescription>
           </DialogHeader>
 
           {phase === "upload" && (
             <FileDropzone accept={ACCEPT} onFile={onFile}>
               <FileUp className="mb-3 size-8 text-muted-foreground" />
-              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih file Word (.docx) / PDF / Excel (.xlsx)</span>
+              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih file Word (.docx) / PDF / Excel (.xlsx) / CSV</span>
               <span className="mt-1 text-xs text-muted-foreground">
-                Word memberikan gambar otomatis · PDF sebagai teks · Excel 1 baris = 1 task · maks 25 MB
+                Word memberikan gambar otomatis · PDF sebagai teks · Excel &amp; CSV 1 baris = 1 task (ekspor Jira dikenali) · maks 25 MB
               </span>
             </FileDropzone>
           )}
