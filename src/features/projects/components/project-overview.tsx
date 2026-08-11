@@ -52,7 +52,7 @@ export function ProjectOverview({ project }: { project: ProjectDetail }) {
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-xs text-muted-foreground">Owner</p>
+              <p className="text-xs text-muted-foreground">PIC</p>
               <p className="text-sm font-medium">
                 {project.owner?.full_name ?? "Unassigned"}
               </p>

@@ -119,7 +119,7 @@ export async function analyzeImportDocument(input: unknown): Promise<
     const parser = getParser(fileName);
     if (!parser) {
       await plan.updateImportJob(jobId, { status: "failed", error: "Unsupported file type" });
-      return actionError("VALIDATION", "Only .docx or .pdf files are supported.");
+      return actionError("VALIDATION", "Only .docx, .pdf or .xlsx files are supported.");
     }
     const dl = await admin.storage.from(bucket).download(path);
     if (dl.error || !dl.data) {

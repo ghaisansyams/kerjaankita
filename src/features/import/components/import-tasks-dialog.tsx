@@ -35,7 +35,7 @@ type Status = { id: string; name: string; color: string | null };
 type Phase = "upload" | "parsing" | "review" | "committing";
 
 const ACCEPT =
-  ".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf";
+  ".docx,.pdf,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export function ImportTasksDialog({
@@ -67,8 +67,8 @@ export function ImportTasksDialog({
 
   async function onFile(file: File) {
     const lower = file.name.toLowerCase();
-    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf")) {
-      toast.error("Hanya file Word (.docx) atau PDF.");
+    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf") && !lower.endsWith(".xlsx")) {
+      toast.error("Hanya file Word (.docx), PDF, atau Excel (.xlsx).");
       return;
     }
     if (file.size > MAX_BYTES) {
@@ -172,9 +172,9 @@ export function ImportTasksDialog({
           {phase === "upload" && (
             <FileDropzone accept={ACCEPT} onFile={onFile}>
               <FileUp className="mb-3 size-8 text-muted-foreground" />
-              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih file Word (.docx) / PDF</span>
+              <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih file Word (.docx) / PDF / Excel (.xlsx)</span>
               <span className="mt-1 text-xs text-muted-foreground">
-                File Word memberikan gambar otomatis · PDF diproses sebagai teks · maks 25 MB
+                Word memberikan gambar otomatis · PDF sebagai teks · Excel 1 baris = 1 task · maks 25 MB
               </span>
             </FileDropzone>
           )}

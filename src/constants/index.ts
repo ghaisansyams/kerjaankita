@@ -201,6 +201,17 @@ export const PROJECT_COLORS = [
   "#DB2777", "#059669", "#D97706", "#DC2626", "#475569",
 ] as const;
 
+/**
+ * Ready-made project keys for the delivery lines we run most often. Offered as
+ * a picker next to the Key field — the field stays free-text, so anything else
+ * that satisfies the 2–6 uppercase rule is still accepted.
+ */
+export const PROJECT_KEY_PRESETS = [
+  { key: "WEB", label: "Web" },
+  { key: "MOBILE", label: "Mobile" },
+  { key: "IOT", label: "IoT" },
+] as const;
+
 /** Progress steps offered in the UI (0, 10, 20 … 100). */
 export const PROGRESS_STEPS = Array.from({ length: 11 }, (_, i) => i * 10);
 

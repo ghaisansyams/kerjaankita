@@ -9,6 +9,7 @@ import { PRIORITY_LABELS, type Priority, type StatusCategory } from "@/constants
 import { deleteTask } from "../actions";
 import { TaskStatusSelect, type StatusOption } from "./task-status-select";
 import { TaskProgressSelect } from "./task-progress-select";
+import { TaskPicSelect } from "./task-pic-select";
 import { TaskChecklist, type ChecklistItemVM } from "./task-checklist";
 import { TaskForm, type MemberOption } from "./task-form";
 import {
@@ -240,25 +241,33 @@ export function TaskDrawer({
                   </div>
                 )}
 
+                {/* PIC sits with Status/Progress: it's the third thing a manager
+                    changes on the board, and leaving it read-only here is what
+                    let tasks sit around with nobody responsible. */}
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">PIC</p>
+                  {canEditAll ? (
+                    <TaskPicSelect
+                      taskId={task.id}
+                      assigneeId={task.assigneeId}
+                      members={members}
+                    />
+                  ) : task.assigneeName ? (
+                    <span className="flex items-center gap-1.5 text-sm">
+                      <Avatar className="size-5">
+                        {task.assigneeAvatar && <AvatarImage src={task.assigneeAvatar} alt="" />}
+                        <AvatarFallback className="text-[9px]">
+                          {getInitials(task.assigneeName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {task.assigneeName}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Unassigned</span>
+                  )}
+                </div>
+
                 <dl className="grid grid-cols-2 gap-3">
-                  <MetaRow
-                    label="Assignee"
-                    value={
-                      task.assigneeName ? (
-                        <span className="flex items-center gap-1.5">
-                          <Avatar className="size-5">
-                            {task.assigneeAvatar && <AvatarImage src={task.assigneeAvatar} alt="" />}
-                            <AvatarFallback className="text-[9px]">
-                              {getInitials(task.assigneeName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          {task.assigneeName}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Unassigned</span>
-                      )
-                    }
-                  />
                   <MetaRow label="Priority" value={PRIORITY_LABELS[task.priority]} />
                   <MetaRow label="Start" value={formatDate(task.startDate)} />
                   <MetaRow label="Due" value={formatDate(task.dueDate)} />

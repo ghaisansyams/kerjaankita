@@ -2,9 +2,10 @@ import "server-only";
 import mammoth from "mammoth";
 import { parse as parseHtml } from "node-html-parser";
 import { extractText, getDocumentProxy } from "unpdf";
+import { readSheetRows } from "@/services/import/parsers/xlsx-rows";
 
 /**
- * Turns a raw progress report (.docx / .pdf) into an ordered list of tasks.
+ * Turns a raw progress report (.docx / .pdf / .xlsx) into an ordered list of tasks.
  * The document is expected to be a numbered list of items, each optionally
  * followed by screenshots (Word only) — exactly the format PICs already write.
  *
@@ -155,9 +156,61 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedTask[]> {
   return tasks.slice(0, MAX_TASKS);
 }
 
+/** Header cells that mark the column holding the task itself. */
+const TITLE_HEAD =
+  /^(task|tasks|judul|title|pekerjaan|kegiatan|aktivitas|item|deskripsi tugas|nama tugas|to ?do)$/i;
+/** Header cells whose column is supporting detail rather than the task. */
+const DESC_HEAD = /^(deskripsi|description|keterangan|catatan|notes?|detail|remarks?)$/i;
+/** A row is a header if any cell names a column we recognise. */
+const isHeaderRow = (row: string[]) =>
+  row.some((c) => TITLE_HEAD.test(c) || DESC_HEAD.test(c));
+
+/**
+ * XLSX → one task per row. A spreadsheet is already a list, so there's no
+ * numbered-heading heuristic to run: we look for a header row to learn which
+ * column is the task and which are detail, and fall back to "first non-empty
+ * cell is the title, the rest is description" for sheets without one.
+ */
+export async function parseXlsx(buffer: Buffer): Promise<ParsedTask[]> {
+  const sheets = await readSheetRows(buffer);
+  const tasks: ParsedTask[] = [];
+
+  for (const sheet of sheets) {
+    let titleCol = -1;
+    let descCols: number[] = [];
+    let start = 0;
+
+    const head = sheet.rows[0];
+    if (head && isHeaderRow(head)) {
+      start = 1;
+      titleCol = head.findIndex((c) => TITLE_HEAD.test(c));
+      descCols = head
+        .map((c, i) => (DESC_HEAD.test(c) ? i : -1))
+        .filter((i) => i >= 0);
+    }
+
+    for (const row of sheet.rows.slice(start)) {
+      // Without a header, the first cell carrying text is the task.
+      const ti = titleCol >= 0 ? titleCol : row.findIndex((c) => c !== "");
+      const title = stripNum((row[ti] ?? "").trim());
+      if (!title || STOP.test(title)) continue;
+
+      const detail = (descCols.length ? descCols.map((i) => row[i]) : row.filter((_, i) => i !== ti))
+        .map((c) => (c ?? "").trim())
+        .filter(Boolean)
+        .join("\n");
+
+      tasks.push({ title: title.slice(0, 200), description: detail, images: [] });
+      if (tasks.length >= MAX_TASKS) return tasks;
+    }
+  }
+  return tasks;
+}
+
 export async function parseDocument(buffer: Buffer, fileName: string): Promise<ParsedTask[]> {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".docx")) return parseDocx(buffer);
   if (lower.endsWith(".pdf")) return parsePdf(buffer);
-  throw new Error("Unsupported file type. Upload a .docx or .pdf.");
+  if (lower.endsWith(".xlsx")) return parseXlsx(buffer);
+  throw new Error("Unsupported file type. Upload a .docx, .pdf or .xlsx.");
 }

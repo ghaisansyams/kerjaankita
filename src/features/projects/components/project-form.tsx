@@ -10,7 +10,11 @@ import {
   PROJECT_VISIBILITIES,
   type ProjectFormValues,
 } from "@/schemas/project.schema";
-import { PROJECT_COLORS, PROJECT_VISIBILITY_LABELS } from "@/constants";
+import {
+  PROJECT_COLORS,
+  PROJECT_KEY_PRESETS,
+  PROJECT_VISIBILITY_LABELS,
+} from "@/constants";
 import { cn } from "@/lib/utils";
 import { createProject, updateProject } from "../actions";
 import {
@@ -39,6 +43,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 export type PickerOption = { id: string; name: string };
 export type MemberOption = {
@@ -206,14 +223,41 @@ export function ProjectForm({
                   <FormItem>
                     <FormLabel>Key (optional)</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="WEB"
-                        maxLength={6}
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(e.target.value.toUpperCase())
-                        }
-                      />
+                      {/* Free-text, with a picker for the delivery lines we run
+                          most often. Typing still wins — the presets only fill
+                          the same input. */}
+                      <InputGroup>
+                        <InputGroupInput
+                          placeholder="WEB"
+                          maxLength={6}
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <InputGroupButton aria-label="Choose a preset key">
+                                <ChevronDown />
+                              </InputGroupButton>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {PROJECT_KEY_PRESETS.map((p) => (
+                                <DropdownMenuItem
+                                  key={p.key}
+                                  onSelect={() => field.onChange(p.key)}
+                                >
+                                  <span className="font-mono text-xs text-muted-foreground">
+                                    {p.key}
+                                  </span>
+                                  {p.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </InputGroupAddon>
+                      </InputGroup>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -253,7 +297,7 @@ export function ProjectForm({
                 name="ownerId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Owner</FormLabel>
+                    <FormLabel>PIC</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">

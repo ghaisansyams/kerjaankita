@@ -107,13 +107,21 @@ export function KanbanCardBody({
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex items-center gap-2 text-xs">
+            {/* Name, not just an avatar: scanning a column should answer "who
+                owns this?" — and an unassigned card should say so in words. */}
             {task.assignee_id ? (
-              <Avatar className="size-5">
-                {task.assignee_avatar && <AvatarImage src={task.assignee_avatar} alt="" />}
-                <AvatarFallback className="text-[8px]">{getInitials(task.assignee_name)}</AvatarFallback>
-              </Avatar>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Avatar className="size-5 shrink-0">
+                  {task.assignee_avatar && <AvatarImage src={task.assignee_avatar} alt="" />}
+                  <AvatarFallback className="text-[8px]">{getInitials(task.assignee_name)}</AvatarFallback>
+                </Avatar>
+                <span className="truncate text-muted-foreground">{task.assignee_name}</span>
+              </span>
             ) : (
-              <span className="grid size-5 place-items-center rounded-full border border-dashed text-[8px] text-muted-foreground">?</span>
+              <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+                <span className="grid size-5 place-items-center rounded-full border border-dashed text-[8px]">?</span>
+                No PIC
+              </span>
             )}
             <Due due={task.due_date} done={done} />
             {task.est_hours != null && (

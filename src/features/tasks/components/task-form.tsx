@@ -102,7 +102,9 @@ export function TaskForm({
       title: v.title,
       description: v.description || undefined,
       priority: v.priority,
-      assigneeId: v.assigneeId === "none" ? undefined : v.assigneeId,
+      // null (not undefined) so picking "Unassigned" actually clears the PIC;
+      // on create the schema folds null back to "no assignee".
+      assigneeId: v.assigneeId === "none" ? null : v.assigneeId,
       startDate: v.startDate || undefined,
       dueDate: v.dueDate || undefined,
       estimatedHours: v.estimatedHours || undefined,
@@ -211,7 +213,7 @@ export function TaskForm({
                 name="assigneeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Assignee</FormLabel>
+                    <FormLabel>PIC</FormLabel>
                     <Select value={field.value || "none"} onValueChange={field.onChange} disabled={lock}>
                       <FormControl>
                         <SelectTrigger className="w-full">

@@ -3,6 +3,16 @@ import { z } from "zod";
 const optional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (v === "" || v === null || v === "none" ? undefined : v), schema.optional());
 
+/**
+ * PIC on update, explicitly nullable: `"none"`/`""` clear it, `undefined` leaves
+ * it untouched. Plain `optional()` collapses both to `undefined`, which made
+ * picking "Unassigned" a silent no-op.
+ */
+const assigneeUpdate = z.preprocess(
+  (v) => (v === "" || v === "none" ? null : v),
+  z.string().uuid().nullable().optional(),
+);
+
 /* -------------------------------------------------------------------------- */
 /*  Server (authoritative) schemas                                            */
 /* -------------------------------------------------------------------------- */
@@ -30,7 +40,7 @@ export const updateTaskSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     description: optional(z.string().max(10000)),
     priority: z.enum(["none", "low", "medium", "high", "critical"]).optional(),
-    assigneeId: optional(z.string().uuid()),
+    assigneeId: assigneeUpdate,
     startDate: optional(z.string()),
     dueDate: optional(z.string()),
     estimatedHours: optional(z.coerce.number().min(0).max(100000)),

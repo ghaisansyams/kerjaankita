@@ -56,7 +56,8 @@ type Analysis = {
 };
 type Phase = "checking" | "disabled" | "upload" | "analyzing" | "expanding" | "preview" | "committing";
 
-const ACCEPT = ".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const ACCEPT =
+  ".docx,.pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const MAX_BYTES = 25 * 1024 * 1024;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -119,10 +120,11 @@ export function AiImportDialog({
 
   async function onFile(file: File) {
     const lower = file.name.toLowerCase();
-    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf")) return toast.error("Hanya .docx atau .pdf.");
+    if (!lower.endsWith(".docx") && !lower.endsWith(".pdf") && !lower.endsWith(".xlsx"))
+      return toast.error("Hanya .docx, .pdf, atau .xlsx.");
     if (file.size > MAX_BYTES) return toast.error("File terlalu besar (maks 25 MB).");
     setFileName(file.name);
-    setProjectName(file.name.replace(/\.(docx|pdf)$/i, "").replace(/[_-]+/g, " ").trim());
+    setProjectName(file.name.replace(/\.(docx|pdf|xlsx)$/i, "").replace(/[_-]+/g, " ").trim());
     setPhase("analyzing");
     try {
       const req = await requestAiImportUpload({ fileName: file.name, fileType: file.type });
@@ -300,7 +302,7 @@ export function AiImportDialog({
             <div className="space-y-3">
               <FileDropzone accept={ACCEPT} onFile={onFile}>
                 <FileUp className="mb-3 size-8 text-muted-foreground" />
-                <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih dokumen (.docx / .pdf)</span>
+                <span className="text-sm font-medium">Tarik &amp; letakkan, atau pilih dokumen (.docx / .pdf / .xlsx)</span>
                 <span className="mt-1 text-xs text-muted-foreground">
                   AI mengerti SRS, feature/functional spec, scope, MOM, client requirements · maks 25 MB
                 </span>

@@ -1,4 +1,4 @@
-// Parser abstraction. Adding Excel/PowerPoint later = implement DocumentParser
+// Parser abstraction. Adding PowerPoint later = implement DocumentParser
 // and register it in ./index — the pipeline is format-agnostic.
 
 export type ParsedImage = {
@@ -15,7 +15,7 @@ export type ParsedTable = {
 };
 
 export type ParsedDocument = {
-  kind: "docx" | "pdf";
+  kind: "docx" | "pdf" | "xlsx";
   /** Plain text, with `[IMAGE n]` / `[TABLE n]` placeholders where known. */
   text: string;
   images: ParsedImage[];
