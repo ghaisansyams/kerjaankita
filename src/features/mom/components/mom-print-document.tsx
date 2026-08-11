@@ -22,10 +22,10 @@ const CSS = `
   .mom-doc table.frame { width: 100%; border-collapse: collapse; }
   .mom-doc table.frame > tbody > tr > td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; }
   .mom-doc .logo-cell { text-align: center; padding: 12px; }
-  /* 40px, not the old 58px: the primary lockup is a 3.50 ratio against the old
-     mark's 2.40, so the same height rendered it half again as wide as the
-     reference MOM. Height is still what binds — 40px lands ~140px wide. */
-  .mom-doc .logo-cell img { max-height: 40px; max-width: 260px; object-fit: contain; display: block; margin: 0 auto; }
+  /* Sized by eye against the reference, between the two rejected extremes:
+     58px (203px wide) read as too big, 40px (140px) as too small. 50px lands
+     at 175px. Height binds; the 260px cap never comes into play. */
+  .mom-doc .logo-cell img { max-height: 50px; max-width: 260px; object-fit: contain; display: block; margin: 0 auto; }
   .mom-doc .logo-cell .txt { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
   /* 57/43, matching the reference MOM. One table means one column split for
      every row, so this also sets Mengetahui | Distribusi and the signature
