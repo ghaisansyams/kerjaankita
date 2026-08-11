@@ -66,7 +66,10 @@ export function MomPrintDocument({
   orgName: string;
   logoUrl: string | null;
 }) {
-  const logo = logoUrl || "/mom/logo.png";
+  // No hardcoded fallback: the header shows a logo only when the organization
+  // has one of its own. Upload it in Settings → Workspace and it appears here —
+  // no deploy needed, and no other org inherits Spero's mark.
+  const logo = logoUrl;
   const showSignature = /galih/i.test(mom.approvedByName);
   // Company signs at its HQ city; date follows the meeting (never "today").
   const placeDate = `Depok, ${idLongDate(mom.meetingDate)}`;
@@ -77,12 +80,15 @@ export function MomPrintDocument({
 
       <table className="frame">
         <tbody>
-          {/* Logo */}
-          <tr>
-            <td className="logo-cell" colSpan={2}>
-              {logo ? <img src={logo} alt={orgName} /> : <span className="txt">{orgName}</span>}
-            </td>
-          </tr>
+          {/* Logo — the row is dropped entirely when there's none, rather than
+              leaving an empty band above the MOM header. */}
+          {logo && (
+            <tr>
+              <td className="logo-cell" colSpan={2}>
+                <img src={logo} alt={orgName} />
+              </td>
+            </tr>
+          )}
 
           {/* MOM | meeting info */}
           <tr>
