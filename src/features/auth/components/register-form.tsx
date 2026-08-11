@@ -7,7 +7,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { signUp, type AuthActionState } from "@/features/auth/actions";
 import { AuthAlert } from "./auth-alert";
 
-export function RegisterForm() {
+export function RegisterForm({ redirectTo }: { redirectTo?: string }) {
   const [state, formAction] = useActionState<AuthActionState, FormData>(
     signUp,
     undefined,
@@ -16,6 +16,7 @@ export function RegisterForm() {
   return (
     <form action={formAction} className="space-y-4">
       <AuthAlert error={state?.error} success={state?.success} />
+      {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
 
       <div className="space-y-2">
         <Label htmlFor="fullName">Full name</Label>

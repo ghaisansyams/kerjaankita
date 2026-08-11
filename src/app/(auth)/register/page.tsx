@@ -4,7 +4,12 @@ import { RegisterForm } from "@/features/auth/components/register-form";
 
 export const metadata: Metadata = { title: "Create account" };
 
-export default function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string }>;
+}) {
+  const { redirectTo } = await searchParams;
   return (
     <div className="space-y-6">
       <div className="space-y-1.5">
@@ -16,12 +21,12 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <RegisterForm />
+      <RegisterForm redirectTo={redirectTo} />
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : "/login"}
           className="font-medium text-foreground hover:underline"
         >
           Sign in

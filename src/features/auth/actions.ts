@@ -53,13 +53,19 @@ export async function signUp(
   });
   if (!parsed.success) return { error: firstError(parsed.error.issues) };
 
+  // Guests reach this page from /invite/<token>; without carrying that through,
+  // they'd sign up and land on the dashboard with the invitation still pending.
+  // Only relative paths, so the redirect can't be pointed at another site.
+  const raw = (formData.get("redirectTo") as string) || "";
+  const redirectTo = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
       data: { full_name: parsed.data.fullName },
-      emailRedirectTo: `${SITE_URL}/auth/callback`,
+      emailRedirectTo: `${SITE_URL}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
     },
   });
   if (error) return { error: error.message };
@@ -70,7 +76,7 @@ export async function signUp(
       success: "Almost there — check your email to confirm your account.",
     };
   }
-  redirect("/dashboard");
+  redirect(redirectTo);
 }
 
 export async function signOut(): Promise<void> {
