@@ -43,6 +43,15 @@ export const registerAttachmentSchema = z.object({
 
 export const attachmentIdSchema = z.object({ id: z.string().uuid() });
 
+/**
+ * Same target, two intents. Omitted/false yields a URL the browser renders
+ * inline (previewing); true adds Content-Disposition so it saves to disk.
+ * Authorization is identical either way — the flag only picks the header.
+ */
+export const attachmentUrlSchema = attachmentIdSchema.extend({
+  download: z.boolean().optional(),
+});
+
 export const shareAttachmentSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),

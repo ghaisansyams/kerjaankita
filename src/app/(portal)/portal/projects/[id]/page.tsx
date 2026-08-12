@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireOrgContext } from "@/lib/auth";
-import type { StatusCategory } from "@/constants";
+import type { Priority, StatusCategory } from "@/constants";
 import { getProject } from "@/repositories/project.repository";
 import { listTasks } from "@/repositories/task.repository";
 import { listProjectAttachments } from "@/repositories/attachment.repository";
@@ -58,12 +58,14 @@ export default async function PortalProjectPage({
         progress: t.progress,
         assigneeName: t.assignee?.full_name ?? null,
         dueDate: t.due_date,
+        priority: (t.priority ?? null) as Priority | null,
         isBlocked: t.is_blocked,
       }))}
       files={attachments.map((a) => ({
         id: a.id,
         taskId: a.entity === "task" ? a.entity_id : null,
         fileName: a.file_name,
+        fileType: a.file_type,
         fileSize: a.file_size,
         createdAt: a.created_at,
       }))}

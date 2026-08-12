@@ -1,19 +1,25 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Download, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { Eye, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate, formatRelative, getInitials, toDate } from "@/utils/format";
 import { humanizeActivity } from "@/utils/humanize-activity";
-import { PROJECT_HEALTH_BADGE, PROJECT_HEALTH_LABELS, type ProjectHealth, type StatusCategory } from "@/constants";
-import { getDownloadUrl } from "@/features/attachments/actions";
+import { PROJECT_HEALTH_BADGE, PROJECT_HEALTH_LABELS, type ProjectHealth, type Priority, type StatusCategory } from "@/constants";
 import { ProgressRing } from "@/components/domain/progress-ring";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { AllTasksDialog } from "./all-tasks-dialog";
+import { AllUpdatesDialog } from "./all-updates-dialog";
+import { FilePreviewDialog, formatBytes, type PortalFileVM } from "./file-preview-dialog";
+
+/** Enough to read the shape of the work without turning the page into a list. */
+const TASK_PREVIEW = 6;
+const UPDATE_PREVIEW = 6;
 
 type TaskVM = {
   id: string;
@@ -25,9 +31,10 @@ type TaskVM = {
   progress: number;
   assigneeName: string | null;
   dueDate: string | null;
+  priority: Priority | null;
   isBlocked: boolean;
 };
-type FileVM = { id: string; taskId: string | null; fileName: string; fileSize: number | null; createdAt: string };
+type FileVM = PortalFileVM;
 type UpdateVM = {
   id: string;
   action: string;
@@ -48,18 +55,6 @@ type ProjectVM = {
 
 const noLookup = { statusName: () => null, memberName: () => null };
 
-function bytes(n: number | null) {
-  if (n == null) return "";
-  const u = ["B", "KB", "MB", "GB"];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < u.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
-}
-
 export function GuestProjectView({
   project,
   tasks,
@@ -74,7 +69,9 @@ export function GuestProjectView({
   openTaskId: string | null;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [allTasksOpen, setAllTasksOpen] = useState(false);
+  const [allUpdatesOpen, setAllUpdatesOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileVM | null>(null);
 
   const openTask = openTaskId ? tasks.find((t) => t.id === openTaskId) ?? null : null;
   const taskFiles = useMemo(
@@ -82,15 +79,9 @@ export function GuestProjectView({
     [files, openTask],
   );
 
-  function download(id: string) {
-    startTransition(async () => {
-      const r = await getDownloadUrl({ id });
-      if (r?.ok) window.open(r.data.url, "_blank", "noopener,noreferrer");
-      else toast.error(r?.error.message ?? "That file isn't available.");
-    });
-  }
-
   const scheduled = tasks.filter((t) => t.dueDate);
+  const visibleTasks = tasks.slice(0, TASK_PREVIEW);
+  const visibleUpdates = updates.slice(0, UPDATE_PREVIEW);
 
   return (
     <div className="space-y-6">
@@ -149,7 +140,7 @@ export function GuestProjectView({
                 <p className="py-6 text-center text-sm text-muted-foreground">No tasks yet.</p>
               ) : (
                 <ul className="divide-y">
-                  {tasks.map((t) => (
+                  {visibleTasks.map((t) => (
                     <li key={t.id}>
                       <button
                         type="button"
@@ -170,6 +161,13 @@ export function GuestProjectView({
                   ))}
                 </ul>
               )}
+              {tasks.length > TASK_PREVIEW && (
+                <div className="pt-2 text-right">
+                  <Button variant="ghost" size="sm" onClick={() => setAllTasksOpen(true)}>
+                    Show all tasks ({tasks.length}) →
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -186,17 +184,20 @@ export function GuestProjectView({
               ) : (
                 <ul className="space-y-1.5">
                   {files.map((f) => (
-                    <li key={f.id} className="flex items-center gap-2">
-                      <FileText className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-sm">{f.fileName}</span>
+                    <li key={f.id}>
+                      {/* Preview first: opening a file shouldn't dump it in the
+                          downloads folder before the client has seen it. */}
                       <button
                         type="button"
-                        aria-label={`Download ${f.fileName}`}
-                        onClick={() => download(f.id)}
-                        disabled={pending}
-                        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => setPreviewFile(f)}
+                        aria-label={`Pratinjau ${f.fileName}`}
+                        className="flex w-full items-center gap-2 rounded px-1 py-1 text-left outline-none hover:bg-muted/40 focus-visible:bg-muted/40"
                       >
-                        <Download className="size-4" />
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-sm">{f.fileName}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatBytes(f.fileSize)}
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -215,7 +216,7 @@ export function GuestProjectView({
                 <p className="py-4 text-center text-sm text-muted-foreground">No updates yet.</p>
               ) : (
                 <ul className="space-y-3">
-                  {updates.map((u) => (
+                  {visibleUpdates.map((u) => (
                     <li key={u.id} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                       <Avatar className="mt-0.5 size-6 shrink-0">
                         {u.actorAvatar && <AvatarImage src={u.actorAvatar} alt="" />}
@@ -229,6 +230,13 @@ export function GuestProjectView({
                     </li>
                   ))}
                 </ul>
+              )}
+              {updates.length > UPDATE_PREVIEW && (
+                <div className="pt-3 text-right">
+                  <Button variant="ghost" size="sm" onClick={() => setAllUpdatesOpen(true)}>
+                    Show all updates →
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -275,15 +283,14 @@ export function GuestProjectView({
                         <li key={f.id} className="flex items-center gap-2">
                           <FileText className="size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1 truncate text-sm">{f.fileName}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">{bytes(f.fileSize)}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(f.fileSize)}</span>
                           <button
                             type="button"
-                            aria-label={`Download ${f.fileName}`}
-                            onClick={() => download(f.id)}
-                            disabled={pending}
+                            aria-label={`Pratinjau ${f.fileName}`}
+                            onClick={() => setPreviewFile(f)}
                             className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
                           >
-                            <Download className="size-4" />
+                            <Eye className="size-4" />
                           </button>
                         </li>
                       ))}
@@ -295,6 +302,15 @@ export function GuestProjectView({
           )}
         </SheetContent>
       </Sheet>
+
+      <AllTasksDialog open={allTasksOpen} onOpenChange={setAllTasksOpen} tasks={tasks} />
+      <AllUpdatesDialog
+        open={allUpdatesOpen}
+        onOpenChange={setAllUpdatesOpen}
+        projectId={project.id}
+        fallback={updates}
+      />
+      <FilePreviewDialog file={previewFile} onOpenChange={(o) => !o && setPreviewFile(null)} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { checkPermission } from "@/repositories/permission.repository";
 import { revalidatePath } from "next/cache";
 import {
   attachmentIdSchema,
+  attachmentUrlSchema,
   registerAttachmentSchema,
   requestUploadSchema,
   shareAttachmentSchema,
@@ -78,12 +79,20 @@ export async function registerAttachment(
   }
 }
 
-/** Short-TTL signed download URL, issued only after an RLS-scoped visibility check. */
+/**
+ * Short-lived signed URL for one attachment, for previewing or downloading.
+ *
+ * Authorization is the RLS-scoped read below — getAttachment returns null when
+ * the caller can't see the file, which for a portal guest means anything not
+ * flagged guest-visible. The `download` flag only decides the
+ * Content-Disposition header, so a preview can never reach a file a download
+ * couldn't. The bucket stays private; nothing here mints a public URL.
+ */
 export async function getDownloadUrl(
   input: unknown,
 ): Promise<ActionResult<{ url: string }>> {
   await requireOrgContext();
-  const parsed = attachmentIdSchema.safeParse(input);
+  const parsed = attachmentUrlSchema.safeParse(input);
   if (!parsed.success) {
     return actionError("VALIDATION", "Invalid request.");
   }
@@ -91,7 +100,11 @@ export async function getDownloadUrl(
     const att = await attachmentRepo.getAttachment(parsed.data.id); // null if not visible
     if (!att) return actionError("NOT_FOUND", "File not found.");
     const admin = createAdminClient();
-    const { data, error } = await admin.storage.from(att.bucket).createSignedUrl(att.path, 60);
+    const { data, error } = await admin.storage
+      .from(att.bucket)
+      // Longer than the 60s a click-through needs: a preview stays open while
+      // the client reads, and an expired src leaves a broken frame behind.
+      .createSignedUrl(att.path, 300, parsed.data.download ? { download: att.file_name } : undefined);
     if (error || !data) return actionError("INTERNAL", "Couldn't create a download link.");
     return actionOk({ url: data.signedUrl });
   } catch (e) {
