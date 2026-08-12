@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Trash2, Workflow } from "lucide-react";
 import { commitImportedTasks, type ImportPreviewTask } from "../actions";
-import { jiraStatus, listJiraProjects, previewJiraIssues } from "../jira-actions";
+import {
+  createProjectFromJira,
+  jiraStatus,
+  listJiraProjects,
+  previewJiraIssues,
+} from "../jira-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +53,8 @@ export function JiraImportDialog({
   const [tasks, setTasks] = useState<ImportPreviewTask[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [statusId, setStatusId] = useState(statuses[0]?.id ?? "");
+  // Fold the issues into this board, or stand up a project of their own.
+  const [target, setTarget] = useState<"board" | "new">("board");
 
   async function openDialog() {
     setOpen(true);
@@ -73,6 +80,7 @@ export function JiraImportDialog({
     setJiraKey("");
     setOpenOnly(false);
     setStatusId(statuses[0]?.id ?? "");
+    setTarget("board");
   }
   function close() {
     setOpen(false);
@@ -99,6 +107,7 @@ export function JiraImportDialog({
   async function commit() {
     const clean = tasks.filter((t) => t.title.trim());
     if (!clean.length) return toast.error("Tidak ada task untuk dibuat.");
+    if (target === "new") return commitAsNewProject(clean);
     setPhase("committing");
     const res = await commitImportedTasks({
       projectId,
@@ -119,6 +128,28 @@ export function JiraImportDialog({
     close();
   }
 
+  async function commitAsNewProject(clean: ImportPreviewTask[]) {
+    setPhase("committing");
+    const jira = jiraProjects.find((p) => p.key === jiraKey);
+    const res = await createProjectFromJira({
+      sourceProjectId: projectId,
+      projectKey: jiraKey.trim(),
+      name: jira?.name || jiraKey.trim(),
+      tasks: clean.map((t) => ({
+        title: t.title.trim(),
+        description: t.description || undefined,
+      })),
+    });
+    if (!res?.ok) {
+      setPhase("review");
+      return toast.error(res?.error.message ?? "Gagal membuat project.");
+    }
+    toast.success(`Project dibuat dengan ${res.data.count} task`);
+    close();
+    // Straight onto the new board — the point of this mode.
+    router.push(`/projects/${res.data.projectId}/tasks`);
+  }
+
   const reviewing = phase === "review" || phase === "committing";
 
   return (
@@ -128,7 +159,7 @@ export function JiraImportDialog({
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="grid-cols-[minmax(0,1fr)] max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Import task dari Jira</DialogTitle>
             <DialogDescription>
@@ -210,27 +241,60 @@ export function JiraImportDialog({
                     — hapus dulu yang tidak perlu
                   </span>
                 </p>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">Masukkan ke kolom</Label>
-                  <Select value={statusId} onValueChange={setStatusId}>
-                    <SelectTrigger className="h-8 w-40">
-                      <SelectValue placeholder="Kolom" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statuses.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {target === "board" && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-muted-foreground">Masukkan ke kolom</Label>
+                    <Select value={statusId} onValueChange={setStatusId}>
+                      <SelectTrigger className="h-8 w-40">
+                        <SelectValue placeholder="Kolom" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statuses.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {truncated && (
                 <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                   Project ini punya lebih dari 100 issue. Yang diambil 100 tertua —
                   import lagi setelah ini untuk sisanya.
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={target === "board" ? "default" : "outline"}
+                  onClick={() => setTarget("board")}
+                  disabled={phase === "committing"}
+                >
+                  Ke board ini
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={target === "new" ? "default" : "outline"}
+                  onClick={() => setTarget("new")}
+                  disabled={phase === "committing"}
+                >
+                  Jadikan project baru
+                </Button>
+              </div>
+
+              {target === "new" && (
+                <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Project baru bernama{" "}
+                  <span className="font-medium text-foreground">
+                    {jiraProjects.find((p) => p.key === jiraKey)?.name || jiraKey}
+                  </span>{" "}
+                  akan dibuat di workspace ini, lalu kamu langsung dibawa ke board-nya.
                 </p>
               )}
 
@@ -262,7 +326,11 @@ export function JiraImportDialog({
                   Batal
                 </Button>
                 <Button onClick={commit} disabled={phase === "committing"}>
-                  {phase === "committing" ? "Membuat…" : `Buat ${tasks.length} task`}
+                  {phase === "committing"
+                    ? "Membuat…"
+                    : target === "new"
+                      ? `Buat project + ${tasks.length} task`
+                      : `Buat ${tasks.length} task`}
                 </Button>
               </DialogFooter>
             </div>

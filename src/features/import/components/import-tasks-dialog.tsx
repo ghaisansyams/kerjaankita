@@ -161,7 +161,7 @@ export function ImportTasksDialog({
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="grid-cols-[minmax(0,1fr)] max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Import task dari dokumen</DialogTitle>
             <DialogDescription>

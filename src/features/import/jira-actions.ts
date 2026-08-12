@@ -7,9 +7,15 @@ import { checkPermission } from "@/repositories/permission.repository";
 import { isJiraConfigured } from "@/lib/env";
 import { JiraError, jiraMyself, jiraProjects, jiraSearchIssues } from "@/services/jira/client";
 import { mapJiraIssue } from "@/services/jira/map";
+import * as projectRepo from "@/repositories/project.repository";
+import * as taskRepo from "@/repositories/task.repository";
+import { createClient } from "@/lib/supabase/server";
+import { PROJECT_COLORS } from "@/constants";
+import { revalidatePath } from "next/cache";
 import { mapUnknownError } from "@/lib/errors";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
 import type { ImportPreviewTask } from "./actions";
+import type { TablesInsert } from "@/types/database.types";
 
 /** Same ceiling the document importer uses, so one review screen behaves alike. */
 const MAX_ISSUES = 100;
@@ -95,6 +101,92 @@ export async function previewJiraIssues(
     return actionOk({ tasks, truncated });
   } catch (e) {
     if (e instanceof JiraError) return actionError("INTERNAL", e.message);
+    return mapUnknownError(e);
+  }
+}
+
+const createFromJiraSchema = z.object({
+  /** The board the dialog was opened from — supplies the workspace to create in. */
+  sourceProjectId: z.string().uuid(),
+  projectKey: z
+    .string()
+    .trim()
+    .regex(/^[A-Z][A-Z0-9_]{1,20}$/, "That doesn't look like a Jira project key"),
+  name: z.string().trim().min(2).max(120),
+  tasks: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        description: z.string().max(5000).optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+/**
+ * Stand up a whole project from a Jira one, rather than folding its issues into
+ * an existing board: creates the project, then its tasks, and hands back the id
+ * so the caller can land the user on the new board.
+ *
+ * The workspace (and the permission scope) comes from the board this was opened
+ * from — the dialog has no workspace picker, and inheriting the current one is
+ * what someone importing from a board would expect.
+ */
+export async function createProjectFromJira(
+  input: unknown,
+): Promise<ActionResult<{ projectId: string; count: number }>> {
+  const ctx = await requireOrgContext();
+  const parsed = createFromJiraSchema.safeParse(input);
+  if (!parsed.success) return actionError("VALIDATION", "Invalid request.");
+  const d = parsed.data;
+  const orgId = ctx.organization.id;
+
+  const sb = await createClient();
+  const { data: source } = await sb
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", d.sourceProjectId)
+    .maybeSingle();
+  const workspaceId = (source as { workspace_id?: string } | null)?.workspace_id;
+  if (!workspaceId) return actionError("NOT_FOUND", "Project not found.");
+
+  if (!(await checkPermission(orgId, PERMISSIONS.PROJECT_CREATE, { workspaceId })))
+    return actionError("FORBIDDEN", "You don't have permission to create projects.");
+
+  try {
+    const projectId = crypto.randomUUID();
+    const values: TablesInsert<"projects"> = {
+      id: projectId,
+      organization_id: orgId,
+      workspace_id: workspaceId,
+      name: d.name,
+      owner_id: ctx.profile.id,
+      visibility: "workspace",
+      color: PROJECT_COLORS[0],
+      // Jira keys are 2-10 chars; ours allows 2-6, so anything longer is dropped
+      // rather than truncated into a key that collides with a real one.
+      key: d.projectKey.length <= 6 ? d.projectKey : null,
+      description: `Diimpor dari Jira (${d.projectKey}).`,
+    };
+    await projectRepo.insertProject(values);
+
+    let count = 0;
+    for (const t of d.tasks) {
+      await taskRepo.insertTask({
+        id: crypto.randomUUID(),
+        organization_id: orgId,
+        project_id: projectId,
+        title: t.title,
+        description: t.description || null,
+        reporter_id: ctx.profile.id,
+      } satisfies TablesInsert<"tasks">);
+      count++;
+    }
+
+    revalidatePath("/projects");
+    return actionOk({ projectId, count });
+  } catch (e) {
     return mapUnknownError(e);
   }
 }
