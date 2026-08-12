@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,13 +17,16 @@ export function Logo({ className }: { className?: string }) {
         className,
       )}
     >
-      <Image
+      {/* Plain img, not next/image: /_next/image hangs for this asset in
+          production, which left the tile rendering blank. Optimising a 24KB
+          mark shown at 28px buys nothing anyway, and this can't fail that way. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/brand/kerjaankita-logo.png"
         alt=""
         aria-hidden="true"
         width={256}
         height={256}
-        priority
         className="h-full w-full object-contain"
       />
     </span>
