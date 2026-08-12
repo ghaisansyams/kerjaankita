@@ -6,6 +6,7 @@ import { Building2, Copy, MoreHorizontal, Pencil, Plus, Trash2, UserPlus } from 
 import { toast } from "sonner";
 import type { ClientAccountRow } from "@/repositories/account.repository";
 import {
+  createPortalUser,
   createClientAccount,
   deleteClientAccount,
   inviteClientContact,
@@ -75,6 +76,11 @@ export function ClientsManager({ accounts, canInvite }: { accounts: ClientAccoun
   const [inviteFor, setInviteFor] = useState<ClientAccountRow | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // "invite" hands the client a link to redeem; "create" makes the login here.
+  const [inviteMode, setInviteMode] = useState<"invite" | "create">("invite");
+  const [inviteName, setInviteName] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null);
 
   const isEdit = Boolean(form.id);
 
@@ -144,6 +150,37 @@ export function ClientsManager({ accounts, canInvite }: { accounts: ClientAccoun
     setInviteLink(`${window.location.origin}/invite/${res.data.token}`);
     toast.success("Invite link created");
     router.refresh();
+  }
+
+  async function createAccount() {
+    if (!inviteFor) return;
+    setBusy(true);
+    const res = await createPortalUser({
+      accountId: inviteFor.id,
+      email: inviteEmail.trim(),
+      password: invitePassword,
+      fullName: inviteName.trim(),
+    });
+    setBusy(false);
+    if (!res?.ok) {
+      toast.error(res?.error.message ?? "Couldn't create the account.");
+      return;
+    }
+    setCreatedEmail(res.data.email);
+    toast.success("Portal account created");
+    router.refresh();
+  }
+
+  function closeInvite() {
+    setInviteFor(null);
+    setTimeout(() => {
+      setInviteLink(null);
+      setCreatedEmail(null);
+      setInviteEmail("");
+      setInviteName("");
+      setInvitePassword("");
+      setInviteMode("invite");
+    }, 200);
   }
 
   return (
@@ -281,18 +318,21 @@ export function ClientsManager({ accounts, canInvite }: { accounts: ClientAccoun
         </DialogContent>
       </Dialog>
 
-      {/* Invite to portal */}
-      <Dialog open={Boolean(inviteFor)} onOpenChange={(o) => !o && setInviteFor(null)}>
+      {/* Portal access: hand over a link, or create the login outright */}
+      <Dialog open={Boolean(inviteFor)} onOpenChange={(o) => !o && closeInvite()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Invite {inviteFor?.name} to the portal</DialogTitle>
+            <DialogTitle>Portal access for {inviteFor?.name}</DialogTitle>
             <DialogDescription>
-              They get read-only access to this client&apos;s projects. The link expires in 14 days.
+              Read-only access to this client&apos;s projects.
             </DialogDescription>
           </DialogHeader>
+
           {inviteLink ? (
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Share this invite link</Label>
+              <Label className="text-xs text-muted-foreground">
+                Share this link — the app does not email it. Expires in 14 days.
+              </Label>
               <div className="flex gap-2">
                 <Input readOnly value={inviteLink} className="font-mono text-xs" />
                 <Button
@@ -308,22 +348,97 @@ export function ClientsManager({ accounts, canInvite }: { accounts: ClientAccoun
                 </Button>
               </div>
             </div>
+          ) : createdEmail ? (
+            <div className="space-y-2 rounded-lg border p-3 text-sm">
+              <p className="font-medium">Account ready</p>
+              <p className="text-muted-foreground">
+                {createdEmail} can sign in now — no email confirmation needed. Send
+                them the password you just set and ask them to change it.
+              </p>
+            </div>
           ) : (
-            <Field label="Client email">
-              <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="client@company.com" />
-            </Field>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inviteMode === "invite" ? "default" : "outline"}
+                  onClick={() => setInviteMode("invite")}
+                >
+                  Kirim link undangan
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inviteMode === "create" ? "default" : "outline"}
+                  onClick={() => setInviteMode("create")}
+                >
+                  Buatkan akunnya
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {inviteMode === "invite"
+                  ? "Client mendaftar sendiri dan harus bisa membuka inbox email itu untuk konfirmasi."
+                  : "Kamu yang menentukan passwordnya. Emailnya tidak perlu inbox aktif."}
+              </p>
+
+              <Field label="Client email">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="client@company.com"
+                />
+              </Field>
+
+              {inviteMode === "create" && (
+                <>
+                  <Field label="Nama">
+                    <Input
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                      placeholder="Azam"
+                    />
+                  </Field>
+                  <Field label="Password">
+                    <Input
+                      type="text"
+                      value={invitePassword}
+                      onChange={(e) => setInvitePassword(e.target.value)}
+                      placeholder="Minimal 8 karakter"
+                    />
+                  </Field>
+                </>
+              )}
+            </div>
           )}
+
           <DialogFooter>
-            {inviteLink ? (
-              <Button onClick={() => setInviteFor(null)}>Done</Button>
+            {inviteLink || createdEmail ? (
+              <Button onClick={closeInvite}>Done</Button>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => setInviteFor(null)} disabled={busy}>
+                <Button variant="ghost" onClick={closeInvite} disabled={busy}>
                   Cancel
                 </Button>
-                <Button onClick={sendInvite} disabled={busy || !inviteEmail.trim()}>
-                  Create invite link
-                </Button>
+                {inviteMode === "invite" ? (
+                  <Button onClick={sendInvite} disabled={busy || !inviteEmail.trim()}>
+                    Create invite link
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={createAccount}
+                    disabled={
+                      busy ||
+                      !inviteEmail.trim() ||
+                      !inviteName.trim() ||
+                      invitePassword.length < 8
+                    }
+                  >
+                    {busy ? "Membuat…" : "Buat akun"}
+                  </Button>
+                )}
               </>
             )}
           </DialogFooter>

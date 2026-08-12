@@ -21,3 +21,11 @@ export const inviteContactSchema = z.object({
   accountId: z.string().uuid(),
   email: z.string().trim().email("Enter a valid email").max(200),
 });
+
+/** Creating a portal account outright: same target as an invite, plus a password. */
+export const createPortalUserSchema = z.object({
+  accountId: z.string().uuid(),
+  email: z.string().trim().email("Enter a valid email").max(200),
+  password: z.string().min(8, "At least 8 characters").max(72),
+  fullName: z.string().trim().min(1, "Name is required").max(120),
+});
