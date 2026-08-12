@@ -13,7 +13,11 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-[7%]",
+        // Fixed padding, not a percentage: percentage padding resolves against
+        // the containing block's width, not this box's. In the sidebar that
+        // parent is ~200px wide, so 7% ate the whole 28px tile and squeezed the
+        // mark to nothing — a white square with nothing in it.
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-0.5",
         className,
       )}
     >
