@@ -14,6 +14,7 @@ import {
   updateTaskStatusSchema,
 } from "@/schemas/task.schema";
 import * as taskRepo from "@/repositories/task.repository";
+import * as notificationRepo from "@/repositories/notification.repository";
 import { getStatusCategory } from "@/repositories/workflow.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
@@ -243,6 +244,14 @@ export async function deleteTask(input: unknown): Promise<ActionResult> {
   try {
     const removed = await taskRepo.softDeleteTask(parsed.data.id, ctx.profile.id);
     if (!removed) return actionError("FORBIDDEN", "You can't delete this task.");
+    // Otherwise the "assigned to you" notices stay in everyone's tray pointing
+    // at a task that no longer resolves. Best-effort: cleanup failing is no
+    // reason to fail the delete the user actually asked for.
+    try {
+      await notificationRepo.deleteNotificationsForEntity("task", parsed.data.id);
+    } catch {
+      /* leave the stale rows; the deep-link resolver handles them gracefully */
+    }
     revalidateTasks(removed.project_id as string);
     return actionOk(undefined);
   } catch (e) {

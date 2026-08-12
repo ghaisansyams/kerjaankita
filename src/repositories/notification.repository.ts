@@ -1,5 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { DbEnums } from "@/types/database.types";
 
 /** Notifications for the current user (RLS scopes to auth.uid()). */
 export async function listNotifications(limit = 50, unreadOnly = false) {
@@ -34,4 +36,20 @@ export async function listNotificationPreferences() {
     .select("type, in_app, email");
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * Drop notifications that point at an entity which no longer exists, so the
+ * tray stops offering links that resolve to nothing.
+ *
+ * Uses the service role on purpose: the RLS delete policy is
+ * `user_id = auth.uid()`, but these rows belong to whoever was notified, not to
+ * whoever did the deleting.
+ */
+export async function deleteNotificationsForEntity(
+  entity: DbEnums<"entity_type">,
+  entityId: string,
+) {
+  const admin = createAdminClient();
+  await admin.from("notifications").delete().eq("entity", entity).eq("entity_id", entityId);
 }
