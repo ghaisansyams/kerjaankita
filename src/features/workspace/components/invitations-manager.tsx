@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { Copy, Send, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/utils/format";
-import { createInvitation, revokeInvitation } from "@/features/invitations/actions";
+import {
+  createInvitation,
+  createMemberAccount,
+  revokeInvitation,
+} from "@/features/invitations/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,12 +57,49 @@ export function InvitationsManager({
   const [memberType, setMemberType] = useState<"member" | "guest">("member");
   const [roleId, setRoleId] = useState(roles[0]?.id ?? "");
   const [accountId, setAccountId] = useState("");
+  // "invite" hands over a link the person redeems; "create" makes the account here.
+  const [mode, setMode] = useState<"invite" | "create">("invite");
+  const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
+  // Shown when the clipboard write fails — otherwise a failed copy leaves the
+  // invitation created and the link nowhere to be found.
+  const [lastLink, setLastLink] = useState<string | null>(null);
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null);
 
   function copy(token: string) {
-    navigator.clipboard?.writeText(inviteLink(token)).then(
+    const link = inviteLink(token);
+    setLastLink(link);
+    navigator.clipboard?.writeText(link).then(
       () => toast.success("Invite link copied"),
-      () => toast.error("Couldn't copy"),
+      // Clipboard access can be refused; the link is rendered below either way.
+      () => toast.message("Salin linknya di bawah"),
     );
+  }
+
+  function createAccount() {
+    if (!email.trim() || !fullName.trim()) return toast.error("Isi email dan nama");
+    if (password.length < 8) return toast.error("Password minimal 8 karakter");
+    if (!roleId) return toast.error("Choose a role");
+    if (memberType === "guest" && !accountId) return toast.error("Choose the client account");
+    startTransition(async () => {
+      const r = await createMemberAccount({
+        email: email.trim(),
+        fullName: fullName.trim(),
+        password,
+        roleId,
+        memberType,
+        accountId: memberType === "guest" ? accountId : undefined,
+      });
+      if (r?.ok) {
+        setCreatedEmail(r.data.email);
+        setEmail("");
+        setFullName("");
+        setPassword("");
+        router.refresh();
+      } else {
+        toast.error(r?.error.message ?? "Couldn't create the account");
+      }
+    });
   }
 
   function invite() {
@@ -98,12 +139,35 @@ export function InvitationsManager({
       {/* Invite form */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Invite someone</CardTitle>
+          <CardTitle className="text-base">Tambah orang</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Members join the workspace; guests get read-only portal access to their account&apos;s projects. Links expire in 14 days.
+            Member masuk ke workspace; guest hanya dapat portal read-only untuk project client-nya.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "invite" ? "default" : "outline"}
+              onClick={() => setMode("invite")}
+            >
+              Kirim link undangan
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "create" ? "default" : "outline"}
+              onClick={() => setMode("create")}
+            >
+              Buatkan akunnya
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {mode === "invite"
+              ? "Aplikasi ini tidak mengirim email — linknya kamu yang kirim, dan orangnya harus bisa membuka inbox itu untuk konfirmasi. Link berlaku 14 hari."
+              : "Kamu tentukan passwordnya. Emailnya tidak perlu inbox aktif, dan akunnya langsung bisa dipakai login."}
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="invite-email">Email</Label>
@@ -143,11 +207,49 @@ export function InvitationsManager({
                 </Select>
               </div>
             )}
+            {mode === "create" && (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="new-name">Nama</Label>
+                  <Input id="new-name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Budi Santoso" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="new-pass">Password</Label>
+                  <Input id="new-pass" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 8 karakter" />
+                </div>
+              </>
+            )}
           </div>
-          <Button onClick={invite} disabled={pending}>
-            <Send className="size-4" />
-            Create invite link
-          </Button>
+
+          {mode === "invite" ? (
+            <Button onClick={invite} disabled={pending}>
+              <Send className="size-4" />
+              Create invite link
+            </Button>
+          ) : (
+            <Button onClick={createAccount} disabled={pending}>
+              <UserRound className="size-4" />
+              {pending ? "Membuat…" : "Buat akun"}
+            </Button>
+          )}
+
+          {lastLink && mode === "invite" && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">
+                Link undangan — kirim sendiri ke orangnya
+              </Label>
+              <Input readOnly value={lastLink} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
+            </div>
+          )}
+
+          {createdEmail && mode === "create" && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="font-medium">Akun siap dipakai</p>
+              <p className="text-muted-foreground">
+                {createdEmail} bisa langsung login — tanpa konfirmasi email. Kirim password yang barusan kamu buat, lalu minta dia menggantinya.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
