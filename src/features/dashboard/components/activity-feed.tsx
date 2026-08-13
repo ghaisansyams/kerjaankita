@@ -4,6 +4,7 @@ import { humanizeActivity } from "@/utils/humanize-activity";
 import { notificationHref } from "@/features/notifications/constants";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AllActivityDialog } from "./all-activity-dialog";
 
 export type FeedItem = {
   id: string;
@@ -18,7 +19,18 @@ export type FeedItem = {
 
 const noLookup = { statusName: () => null, memberName: () => null };
 
-export function ActivityFeed({ items }: { items: FeedItem[] }) {
+/** Enough to see what's moving without the card taking over the dashboard. */
+const PREVIEW = 8;
+
+export function ActivityFeed({
+  items,
+  hasMore = false,
+}: {
+  items: FeedItem[];
+  /** Page fetched one past PREVIEW, so the button only appears when it earns it. */
+  hasMore?: boolean;
+}) {
+  const visible = items.slice(0, PREVIEW);
   return (
     <Card>
       <CardHeader>
@@ -29,7 +41,7 @@ export function ActivityFeed({ items }: { items: FeedItem[] }) {
           <p className="py-8 text-center text-sm text-muted-foreground">No activity yet.</p>
         ) : (
           <ul className="space-y-3">
-            {items.map((a) => {
+            {visible.map((a) => {
               const href = notificationHref(a.entity, a.entityId);
               const line = (
                 <div className="flex items-start gap-2.5">
@@ -58,6 +70,7 @@ export function ActivityFeed({ items }: { items: FeedItem[] }) {
             })}
           </ul>
         )}
+        {hasMore && <AllActivityDialog fallback={visible} />}
       </CardContent>
     </Card>
   );

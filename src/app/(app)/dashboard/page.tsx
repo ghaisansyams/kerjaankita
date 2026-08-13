@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       countCompletedSince(orgId, weekStartIso),
       listMyOpenTasks(orgId, ctx.profile.id),
       listTeamWorkload(orgId),
-      listRecentActivities(orgId, 8),
+      listRecentActivities(orgId, 9), // 1 extra: tells us whether "show all" is warranted
       loadHealthTolerance(orgId),
     ]);
 
@@ -132,6 +132,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4">
         <ActivityFeed
+          hasMore={activities.length > 8}
           items={activities.map((a) => ({
             id: a.id,
             action: a.action,
