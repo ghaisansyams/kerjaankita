@@ -43,13 +43,23 @@ export function ChartCard({
   );
 }
 
-const EMPTY = (
-  <p className="py-10 text-center text-sm text-muted-foreground">Not enough data yet.</p>
-);
+/**
+ * Charts here go empty for one reason: nothing has been assigned or scheduled
+ * yet. Saying "not enough data" left people checking whether the chart was
+ * broken, so the message names the missing input instead.
+ */
+function Empty({ hint }: { hint?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+      <p className="text-sm text-muted-foreground">Belum ada data untuk ditampilkan</p>
+      {hint && <p className="max-w-xs text-xs text-muted-foreground/80">{hint}</p>}
+    </div>
+  );
+}
 
-export function DonutChart({ data }: { data: Slice[] }) {
+export function DonutChart({ data, emptyHint }: { data: Slice[]; emptyHint?: string }) {
   const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return EMPTY;
+  if (total === 0) return <Empty hint={emptyHint} />;
 
   const size = 168;
   const stroke = 24;
@@ -100,8 +110,8 @@ export function DonutChart({ data }: { data: Slice[] }) {
   );
 }
 
-export function BarChart({ data }: { data: Point[] }) {
-  if (data.length === 0) return EMPTY;
+export function BarChart({ data, emptyHint }: { data: Point[]; emptyHint?: string }) {
+  if (data.length === 0) return <Empty hint={emptyHint} />;
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <ul className="space-y-2">
@@ -121,8 +131,18 @@ export function BarChart({ data }: { data: Point[] }) {
   );
 }
 
-export function LineChart({ data, max, suffix = "" }: { data: Point[]; max?: number; suffix?: string }) {
-  if (data.length === 0) return EMPTY;
+export function LineChart({
+  data,
+  max,
+  suffix = "",
+  emptyHint,
+}: {
+  data: Point[];
+  max?: number;
+  suffix?: string;
+  emptyHint?: string;
+}) {
+  if (data.length === 0) return <Empty hint={emptyHint} />;
   const w = 520;
   const h = 160;
   const pad = 24;

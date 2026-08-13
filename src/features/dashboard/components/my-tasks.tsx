@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format, isPast, isToday, isWithinInterval } from "date-fns";
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, UserRoundPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toDate } from "@/utils/format";
 import { ProgressRingMini } from "@/features/tasks/components/card-progress";
@@ -77,9 +77,34 @@ export function MyTasks({ tasks, today }: { tasks: MyTaskVM[]; today: Date }) {
       </CardHeader>
       <CardContent className="min-h-0 flex-1">
         {list.length === 0 ? (
-          <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center">
-            <CircleCheck className="size-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Nothing here — you&apos;re on top of it.</p>
+          // "You're on top of it" is only true when work exists and none of it
+          // is outstanding. With nothing assigned at all the card was claiming
+          // an achievement and hiding the reason it was empty.
+          <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-6 text-center">
+            {tasks.length === 0 ? (
+              <>
+                <UserRoundPlus className="size-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium">Belum ada task untukmu</p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Kartu ini menampilkan task yang PIC-nya kamu. Buka board sebuah
+                  project, klik satu task, lalu set <span className="font-medium">PIC</span> ke
+                  dirimu — task itu langsung muncul di sini.
+                </p>
+                <Link
+                  href="/projects"
+                  className="mt-1 text-xs font-medium text-primary hover:underline"
+                >
+                  Buka Projects →
+                </Link>
+              </>
+            ) : (
+              <>
+                <CircleCheck className="size-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Tidak ada di tab ini — coba tab lain.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <ul className="divide-y">

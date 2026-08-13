@@ -116,7 +116,10 @@ export default async function DashboardPage() {
             <CardTitle className="text-base">Project health</CardTitle>
           </CardHeader>
           <CardContent>
-            <DonutChart data={health} />
+            <DonutChart
+              data={health}
+              emptyHint="Health dihitung dari progress dan tanggal project. Isi tanggal mulai dan selesai di project untuk melihatnya."
+            />
           </CardContent>
         </Card>
         <Card>
@@ -125,7 +128,10 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground">Open tasks per member</p>
           </CardHeader>
           <CardContent>
-            <BarChart data={workloadPoints} />
+            <BarChart
+              data={workloadPoints}
+              emptyHint="Dihitung dari task yang punya PIC. Set PIC pada task di board untuk melihat sebaran beban kerja tim."
+            />
           </CardContent>
         </Card>
       </div>
