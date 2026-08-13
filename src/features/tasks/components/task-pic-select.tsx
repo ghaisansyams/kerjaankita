@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateTask } from "../actions";
@@ -30,24 +30,36 @@ export function TaskPicSelect({
   disabled?: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // Show the pick straight away. Bound to the server prop alone, the select
+  // kept displaying the old name until router.refresh() had re-rendered the
+  // whole board — seconds of a control that looks stuck.
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  useEffect(() => setOptimistic(null), [assigneeId]); // server caught up
 
   function onChange(value: string) {
+    setOptimistic(value);
     startTransition(async () => {
       const result = await updateTask({
         id: taskId,
         assigneeId: value === "none" ? null : value,
       });
-      if (result?.ok) router.refresh();
-      else toast.error(result?.error.message ?? "Couldn't change the PIC");
+      if (result?.ok) {
+        router.refresh();
+      } else {
+        setOptimistic(null); // put the old PIC back; the change didn't land
+        toast.error(result?.error.message ?? "Couldn't change the PIC");
+      }
     });
   }
 
   return (
     <Select
-      value={assigneeId ?? "none"}
+      value={optimistic ?? assigneeId ?? "none"}
       onValueChange={onChange}
-      disabled={disabled || pending}
+      // Not disabled while saving: the request is quick and reversible, and
+      // locking the control is what made this feel frozen.
+      disabled={disabled}
     >
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Unassigned" />

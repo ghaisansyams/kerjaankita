@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PROGRESS_STEPS } from "@/constants";
@@ -23,18 +23,25 @@ export function TaskProgressSelect({
   disabled?: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  useEffect(() => setOptimistic(null), [progress]);
 
   function onChange(value: string) {
+    setOptimistic(value);
     startTransition(async () => {
       const result = await updateTaskProgress({ id: taskId, progress: Number(value) });
-      if (result?.ok) router.refresh();
-      else toast.error(result?.error.message ?? "Couldn't update progress");
+      if (result?.ok) {
+        router.refresh();
+      } else {
+        setOptimistic(null);
+        toast.error(result?.error.message ?? "Couldn't update progress");
+      }
     });
   }
 
   return (
-    <Select value={String(progress)} onValueChange={onChange} disabled={disabled || pending}>
+    <Select value={optimistic ?? String(progress)} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue />
       </SelectTrigger>

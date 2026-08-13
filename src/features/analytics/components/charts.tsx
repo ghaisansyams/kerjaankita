@@ -1,4 +1,5 @@
 import type { Point, Slice } from "@/services/analytics.service";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /** Card wrapper with a visually-hidden data table (accessibility fallback). */
@@ -57,7 +58,16 @@ function Empty({ hint }: { hint?: string }) {
   );
 }
 
-export function DonutChart({ data, emptyHint }: { data: Slice[]; emptyHint?: string }) {
+export function DonutChart({
+  data,
+  emptyHint,
+  centerLabel,
+}: {
+  data: Slice[];
+  emptyHint?: string;
+  /** What the number in the middle counts — "5" alone doesn't say. */
+  centerLabel?: string;
+}) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return <Empty hint={emptyHint} />;
 
@@ -93,18 +103,48 @@ export function DonutChart({ data, emptyHint }: { data: Slice[]; emptyHint?: str
           acc += dash;
           return el;
         })}
-        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-2xl font-semibold">
+        <text
+          x="50%"
+          y={centerLabel ? "45%" : "50%"}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="fill-foreground text-2xl font-semibold"
+        >
           {total}
         </text>
+        {centerLabel && (
+          <text
+            x="50%"
+            y="62%"
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="fill-muted-foreground text-[10px] uppercase tracking-wide"
+          >
+            {centerLabel}
+          </text>
+        )}
       </svg>
-      <ul className="space-y-1.5 text-sm">
-        {data.map((d) => (
-          <li key={d.label} className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-            <span className="text-muted-foreground">{d.label}</span>
-            <span className="ml-auto font-medium tabular-nums">{d.value}</span>
-          </li>
-        ))}
+      <ul className="min-w-0 flex-1 space-y-2 text-sm">
+        {data.map((d) => {
+          // A zero category is context, not a finding — carrying full weight it
+          // competes with the numbers that actually matter.
+          const zero = d.value === 0;
+          return (
+            <li key={d.label} className={cn("flex items-center gap-2", zero && "opacity-45")}>
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: d.color }}
+              />
+              <span className="truncate text-muted-foreground">{d.label}</span>
+              <span className="ml-auto flex items-baseline gap-1.5">
+                <span className="font-medium tabular-nums">{d.value}</span>
+                <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                  {Math.round((d.value / total) * 100)}%
+                </span>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -117,14 +157,18 @@ export function BarChart({ data, emptyHint }: { data: Point[]; emptyHint?: strin
     <ul className="space-y-2">
       {data.map((d) => (
         <li key={d.label} className="flex items-center gap-3 text-sm">
-          <span className="w-28 shrink-0 truncate text-muted-foreground">{d.label}</span>
-          <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
+          <span className="w-28 shrink-0 truncate text-muted-foreground" title={d.label}>
+            {d.label}
+          </span>
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${(d.value / max) * 100}%` }}
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              // Floor at 6%: a value of 1 next to a max of 20 would otherwise
+              // render as a sliver indistinguishable from empty.
+              style={{ width: `${Math.max((d.value / max) * 100, 6)}%` }}
             />
           </div>
-          <span className="w-8 shrink-0 text-right font-medium tabular-nums">{d.value}</span>
+          <span className="w-6 shrink-0 text-right font-medium tabular-nums">{d.value}</span>
         </li>
       ))}
     </ul>

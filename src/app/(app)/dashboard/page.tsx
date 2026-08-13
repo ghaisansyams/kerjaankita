@@ -118,6 +118,7 @@ export default async function DashboardPage() {
           <CardContent>
             <DonutChart
               data={health}
+              centerLabel="project"
               emptyHint="Health dihitung dari progress dan tanggal project. Isi tanggal mulai dan selesai di project untuk melihatnya."
             />
           </CardContent>
