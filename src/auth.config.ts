@@ -38,7 +38,7 @@ export const authConfig: NextAuthConfig = {
       ].some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
       if (!isLoggedIn && !isPublic) {
-        return false;
+        return Response.redirect(new URL("/login", nextUrl));
       }
 
       if (isLoggedIn && (pathname === "/login" || pathname === "/register")) {
