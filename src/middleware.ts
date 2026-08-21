@@ -1,18 +1,10 @@
-import type { NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 
-export async function middleware(request: NextRequest) {
-  return await updateSession(request);
-}
+export default NextAuth(authConfig).auth;
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static, _next/image (build assets)
-     * - favicon.ico and common static image files
-     * Auth callbacks (/auth/*) are matched but treated as public routes.
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -12,7 +12,6 @@ import * as checklistRepo from "@/repositories/checklist.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { TablesInsert } from "@/types/database.types";
 
 // Checklist changes come from the task drawer, which reconciles optimistically
 // and calls router.refresh() — no revalidatePath needed here.
@@ -27,13 +26,12 @@ export async function addChecklistItem(
   }
   try {
     const id = crypto.randomUUID();
-    const values: TablesInsert<"task_checklist_items"> = {
+    await checklistRepo.insertChecklistItem({
       id,
-      organization_id: ctx.organization.id, // re-derived from the task by trigger
-      task_id: parsed.data.taskId,
+      organizationId: ctx.organization.id,
+      taskId: parsed.data.taskId,
       content: parsed.data.content,
-    };
-    await checklistRepo.insertChecklistItem(values);
+    });
     return actionOk({ id });
   } catch (e) {
     return mapUnknownError(e);

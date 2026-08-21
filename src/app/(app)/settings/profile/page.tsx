@@ -36,7 +36,7 @@ export default async function ProfileSettingsPage() {
               title: p.title ?? "",
               timezone: p.timezone,
               locale: p.locale,
-              dateFormat: p.date_format,
+              dateFormat: p.dateFormat,
             }}
           />
         </CardContent>

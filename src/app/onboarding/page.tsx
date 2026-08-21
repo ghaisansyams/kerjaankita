@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getMemberships, requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/env";
+import { prisma } from "@/lib/prisma";
+import { isDatabaseConfigured } from "@/lib/env";
 import { Brand } from "@/components/brand";
 import { CreateOrganizationForm } from "@/features/organizations/components/create-organization-form";
 
@@ -13,7 +13,7 @@ export default async function OnboardingPage({
 }: {
   searchParams: Promise<{ another?: string }>;
 }) {
-  if (!isSupabaseConfigured) redirect("/");
+  if (!isDatabaseConfigured) redirect("/");
   await requireProfile();
 
   const { another } = await searchParams;
@@ -23,11 +23,10 @@ export default async function OnboardingPage({
     // allow reaching this page deliberately via /onboarding?another
   }
 
-  const supabase = await createClient();
-  const { data: industries } = await supabase
-    .from("industries")
-    .select("key, name, description")
-    .order("name");
+  const industries = await prisma.industry.findMany({
+    select: { key: true, name: true, description: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
@@ -44,7 +43,7 @@ export default async function OnboardingPage({
             default workspace, and your owner access.
           </p>
           <div className="mt-6">
-            <CreateOrganizationForm industries={industries ?? []} />
+            <CreateOrganizationForm industries={industries} />
           </div>
         </div>
       </div>

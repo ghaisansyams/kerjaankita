@@ -1,22 +1,18 @@
 /**
  * Centralised environment access.
  *
- * These are read lazily so the app still boots (and `next build` succeeds)
- * before Supabase credentials are wired up. Anything that actually talks to
- * Supabase should check `isSupabaseConfigured` first, or will throw a clear
- * error at call time rather than at import time.
+ * Neon PostgreSQL + Prisma + NextAuth environment configuration.
  */
-export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-/** Server-only. Never import this into a client component. */
-export const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+export const DATABASE_URL =
+  process.env.DATABASE_URL || process.env.DATABASE_URL_UNPOOLED || "";
 
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const isDatabaseConfigured = Boolean(DATABASE_URL);
+// Alias for backward compatibility during migration
+export const isSupabaseConfigured = isDatabaseConfigured;
 
 /* -------------------------------------------------------------------------- */
 /*  Jira (server-only). Basic auth needs the account email AND its API token —  */
@@ -30,11 +26,11 @@ export const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN ?? "";
 
 export const isJiraConfigured = Boolean(JIRA_BASE_URL && JIRA_EMAIL && JIRA_API_TOKEN);
 
-export function assertSupabaseConfigured(): void {
-  if (!isSupabaseConfigured) {
+export function assertDatabaseConfigured(): void {
+  if (!isDatabaseConfigured) {
     throw new Error(
-      "Supabase is not configured. Copy .env.local.example to .env.local and fill in " +
-        "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      "Database is not configured. Please set DATABASE_URL in .env.local",
     );
   }
 }
+export const assertSupabaseConfigured = assertDatabaseConfigured;

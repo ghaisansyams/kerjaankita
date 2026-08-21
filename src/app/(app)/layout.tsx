@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isDatabaseConfigured } from "@/lib/env";
 import { getMemberships, requireOrgContext } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/features/shell/components/app-shell";
 import type { ShellContext } from "@/features/shell/types";
 
@@ -15,32 +15,32 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!isSupabaseConfigured) redirect("/");
+  if (!isDatabaseConfigured) redirect("/");
 
   const ctx = await requireOrgContext();
   // Guests live in the read-only portal, never the internal shell.
   if (ctx.isGuest) redirect("/portal");
   const memberships = await getMemberships();
 
-  const supabase = await createClient();
-  const { count } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", ctx.organization.id)
-    .eq("is_read", false);
+  const count = await prisma.notification.count({
+    where: {
+      userId: ctx.profile.id,
+      isRead: false,
+    },
+  });
 
   const shellCtx: ShellContext = {
     user: {
       id: ctx.profile.id,
-      name: ctx.profile.full_name ?? ctx.profile.email ?? "User",
+      name: ctx.profile.fullName ?? ctx.profile.email ?? "User",
       email: ctx.profile.email ?? "",
-      avatarUrl: ctx.profile.avatar_url,
+      avatarUrl: ctx.profile.avatarUrl,
     },
     org: {
       id: ctx.organization.id,
       name: ctx.organization.name,
       slug: ctx.organization.slug,
-      logoUrl: ctx.organization.logo_url,
+      logoUrl: ctx.organization.logoUrl,
     },
     orgs: memberships
       .filter((m) => m.organization)
@@ -48,7 +48,7 @@ export default async function AppLayout({
         id: m.organization!.id,
         name: m.organization!.name,
         slug: m.organization!.slug,
-        logoUrl: m.organization!.logo_url,
+        logoUrl: m.organization!.logoUrl,
       })),
     roleName: ctx.role?.name ?? "Member",
     isGuest: ctx.isGuest,
@@ -56,7 +56,7 @@ export default async function AppLayout({
   };
 
   return (
-    <AppShell ctx={shellCtx} initialUnread={count ?? 0}>
+    <AppShell ctx={shellCtx} initialUnread={count}>
       {children}
     </AppShell>
   );

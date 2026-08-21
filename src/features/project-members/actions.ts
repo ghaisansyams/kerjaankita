@@ -14,7 +14,6 @@ import { logActivity } from "@/repositories/activity.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { TablesInsert } from "@/types/database.types";
 
 export async function addProjectMember(input: unknown): Promise<ActionResult> {
   const ctx = await requireOrgContext();
@@ -34,14 +33,13 @@ export async function addProjectMember(input: unknown): Promise<ActionResult> {
   }
 
   try {
-    const values: TablesInsert<"project_members"> = {
-      organization_id: ctx.organization.id,
-      project_id: projectId,
-      user_id: userId,
-      role_id: roleId,
-      allocation_pct: allocationPct ?? null,
-    };
-    await memberRepo.insertProjectMember(values);
+    await memberRepo.insertProjectMember({
+      organizationId: ctx.organization.id,
+      projectId,
+      userId,
+      roleId,
+      allocationPct: allocationPct ?? null,
+    });
     await logActivity({
       organizationId: ctx.organization.id,
       projectId,

@@ -1,72 +1,99 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 /** Statuses for a specific workflow (drives the status select and the board). */
 export async function getWorkflowStatuses(workflowId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("workflow_statuses")
-    .select("id, name, color, category, position, is_initial, is_final, auto_progress")
-    .eq("workflow_id", workflowId)
-    .is("deleted_at", null)
-    .order("position");
-  if (error) throw error;
-  return data;
+  const data = await prisma.workflowStatus.findMany({
+    where: {
+      workflowId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      category: true,
+      position: true,
+      isInitial: true,
+      isFinal: true,
+      autoProgress: true,
+    },
+    orderBy: {
+      position: "asc",
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    name: d.name,
+    color: d.color,
+    category: d.category,
+    position: d.position,
+    is_initial: d.isInitial,
+    is_final: d.isFinal,
+    auto_progress: d.autoProgress,
+  }));
 }
 
 /**
- * The task workflow a project's board uses — its own per-project workflow, or
- * the org default task workflow as a fallback for any not-yet-provisioned project.
+ * The task workflow a project's board uses.
  */
 export async function getProjectWorkflowId(projectId: string, orgId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("projects")
-    .select("workflow_id")
-    .eq("id", projectId)
-    .maybeSingle();
-  if (data?.workflow_id) return data.workflow_id;
+  const proj = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { workflowId: true },
+  });
+  if (proj?.workflowId) return proj.workflowId;
   return getDefaultTaskWorkflowId(orgId);
 }
 
 export type WorkflowStatus = Awaited<ReturnType<typeof getWorkflowStatuses>>[number];
 
-/** The stable category of a status (used to detect done/blocked transitions). */
+/** The stable category of a status. */
 export async function getStatusCategory(statusId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("workflow_statuses")
-    .select("category")
-    .eq("id", statusId)
-    .maybeSingle();
-  return data?.category ?? null;
+  const status = await prisma.workflowStatus.findUnique({
+    where: { id: statusId },
+    select: { category: true },
+  });
+  return status?.category ?? null;
 }
 
-/** All task workflows in the org (for the workspace default-workflow picker). */
+/** All task workflows in the org. */
 export async function listTaskWorkflows(orgId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("workflows")
-    .select("id, name, is_default")
-    .eq("organization_id", orgId)
-    .eq("entity", "task")
-    .is("deleted_at", null)
-    .order("is_default", { ascending: false })
-    .order("name");
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.workflow.findMany({
+    where: {
+      organizationId: orgId,
+      entity: "task",
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      isDefault: true,
+    },
+    orderBy: [
+      { isDefault: "desc" },
+      { name: "asc" },
+    ],
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    name: d.name,
+    is_default: d.isDefault,
+  }));
 }
 
-/** The organization's default task workflow id (used by the create form). */
+/** The organization's default task workflow id. */
 export async function getDefaultTaskWorkflowId(orgId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("workflows")
-    .select("id")
-    .eq("organization_id", orgId)
-    .eq("entity", "task")
-    .eq("is_default", true)
-    .is("deleted_at", null)
-    .maybeSingle();
-  return data?.id ?? null;
+  const wf = await prisma.workflow.findFirst({
+    where: {
+      organizationId: orgId,
+      entity: "task",
+      isDefault: true,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  return wf?.id ?? null;
 }

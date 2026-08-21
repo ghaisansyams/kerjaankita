@@ -1,37 +1,94 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export type ReportScope = { workspaceId?: string; projectId?: string };
 
 export async function reportProjects(orgId: string, scope: ReportScope = {}) {
-  const supabase = await createClient();
-  let q = supabase
-    .from("projects")
-    .select("id, name, progress, start_date, end_date, is_archived, workspace_id, workspace:workspaces(name)")
-    .eq("organization_id", orgId)
-    .is("deleted_at", null);
-  if (scope.projectId) q = q.eq("id", scope.projectId);
-  if (scope.workspaceId) q = q.eq("workspace_id", scope.workspaceId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data ?? [];
+  const where: Prisma.ProjectWhereInput = {
+    organizationId: orgId,
+    deletedAt: null,
+  };
+  if (scope.projectId) where.id = scope.projectId;
+  if (scope.workspaceId) where.workspaceId = scope.workspaceId;
+
+  const data = await prisma.project.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      progress: true,
+      startDate: true,
+      endDate: true,
+      isArchived: true,
+      workspaceId: true,
+      workspace: {
+        select: { name: true },
+      },
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    name: d.name,
+    progress: d.progress,
+    start_date: d.startDate ? d.startDate.toISOString().split("T")[0] : null,
+    end_date: d.endDate ? d.endDate.toISOString().split("T")[0] : null,
+    is_archived: d.isArchived,
+    workspace_id: d.workspaceId,
+    workspace: d.workspace,
+  }));
 }
 
 export async function reportTasks(orgId: string, scope: ReportScope = {}) {
-  const supabase = await createClient();
-  let q = supabase
-    .from("tasks")
-    .select(
-      `id, title, due_date, completed_at, estimated_hours, priority, assignee_id, project_id,
-       project:projects!inner(name, workspace_id),
-       assignee:profiles!tasks_assignee_id_fkey(full_name),
-       status:workflow_statuses(category)`,
-    )
-    .eq("organization_id", orgId)
-    .is("deleted_at", null);
-  if (scope.projectId) q = q.eq("project_id", scope.projectId);
-  if (scope.workspaceId) q = q.eq("project.workspace_id", scope.workspaceId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data ?? [];
+  const where: Prisma.TaskWhereInput = {
+    organizationId: orgId,
+    deletedAt: null,
+  };
+  if (scope.projectId) where.projectId = scope.projectId;
+  if (scope.workspaceId) where.project = { workspaceId: scope.workspaceId };
+
+  const data = await prisma.task.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      completedAt: true,
+      estimatedHours: true,
+      priority: true,
+      assigneeId: true,
+      projectId: true,
+      project: {
+        select: {
+          name: true,
+          workspaceId: true,
+        },
+      },
+      assignee: {
+        select: {
+          fullName: true,
+        },
+      },
+      status: {
+        select: {
+          category: true,
+        },
+      },
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    title: d.title,
+    due_date: d.dueDate ? d.dueDate.toISOString().split("T")[0] : null,
+    completed_at: d.completedAt ? d.completedAt.toISOString() : null,
+    estimated_hours: d.estimatedHours ? Number(d.estimatedHours) : null,
+    priority: d.priority,
+    assignee_id: d.assigneeId,
+    project_id: d.projectId,
+    project: d.project,
+    assignee: d.assignee ? { full_name: d.assignee.fullName } : null,
+    status: d.status ? { category: d.status.category } : null,
+  }));
 }

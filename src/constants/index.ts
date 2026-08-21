@@ -1,5 +1,3 @@
-import type { DbEnums } from "@/types/database.types";
-
 /**
  * Domain constants.
  *
@@ -67,7 +65,14 @@ export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 /*  Status categories (stable across every tenant workflow)                   */
 /* -------------------------------------------------------------------------- */
 
-export type StatusCategory = DbEnums<"status_category">;
+export type StatusCategory =
+  | "backlog"
+  | "todo"
+  | "in_progress"
+  | "review"
+  | "done"
+  | "blocked"
+  | "cancelled";
 
 export const STATUS_CATEGORY_LABELS: Record<StatusCategory, string> = {
   backlog: "Backlog",
@@ -107,7 +112,7 @@ export const CLOSED_CATEGORIES: StatusCategory[] = ["done", "cancelled"];
 /*  Priority                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type Priority = DbEnums<"priority_level">;
+export type Priority = "none" | "low" | "medium" | "high" | "critical";
 
 export const PRIORITIES: Priority[] = ["none", "low", "medium", "high", "critical"];
 
@@ -147,7 +152,7 @@ export const PRIORITY_DOT: Record<Priority, string> = {
 /*  Project health / visibility / membership                                  */
 /* -------------------------------------------------------------------------- */
 
-export type ProjectHealth = DbEnums<"project_health">;
+export type ProjectHealth = "on_track" | "at_risk" | "delayed";
 
 export const PROJECT_HEALTH_LABELS: Record<ProjectHealth, string> = {
   on_track: "On Track",
@@ -168,7 +173,7 @@ export const PROJECT_HEALTH_DOT: Record<ProjectHealth, string> = {
   delayed: "bg-rose-500",
 };
 
-export type ProjectVisibility = DbEnums<"project_visibility">;
+export type ProjectVisibility = "organization" | "workspace" | "private";
 
 export const PROJECT_VISIBILITY_LABELS: Record<ProjectVisibility, string> = {
   organization: "Everyone in the organization",
@@ -176,14 +181,14 @@ export const PROJECT_VISIBILITY_LABELS: Record<ProjectVisibility, string> = {
   private: "Project members only",
 };
 
-export type MemberType = DbEnums<"member_type">;
+export type MemberType = "member" | "guest";
 
 export const MEMBER_TYPE_LABELS: Record<MemberType, string> = {
   member: "Member",
   guest: "Guest",
 };
 
-export type MembershipStatus = DbEnums<"membership_status">;
+export type MembershipStatus = "invited" | "active" | "suspended";
 
 export const MEMBERSHIP_STATUS_LABELS: Record<MembershipStatus, string> = {
   invited: "Invited",

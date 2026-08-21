@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireOrgContext } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 import { updateProfile as updateProfileRow } from "@/repositories/profile.repository";
 import {
   changePasswordSchema,
@@ -50,16 +51,17 @@ export async function updateAvatar(input: unknown): Promise<ActionResult> {
 }
 
 export async function changeEmail(input: unknown): Promise<ActionResult> {
-  await requireOrgContext();
+  const ctx = await requireOrgContext();
   const parsed = updateEmailSchema.safeParse(input);
   if (!parsed.success) {
     return actionError("VALIDATION", "Please check the form.", toFieldErrors(parsed.error));
   }
   try {
-    const supabase = await createClient();
-    // Supabase sends a confirmation link to the new address before switching.
-    const { error } = await supabase.auth.updateUser({ email: parsed.data.email });
-    if (error) return actionError("VALIDATION", error.message);
+    await prisma.profile.update({
+      where: { id: ctx.profile.id },
+      data: { email: parsed.data.email.toLowerCase().trim() },
+    });
+    revalidatePath("/settings/profile");
     return actionOk(undefined);
   } catch (e) {
     return mapUnknownError(e);
@@ -67,15 +69,18 @@ export async function changeEmail(input: unknown): Promise<ActionResult> {
 }
 
 export async function changePassword(input: unknown): Promise<ActionResult> {
-  await requireOrgContext();
+  const ctx = await requireOrgContext();
   const parsed = changePasswordSchema.safeParse(input);
   if (!parsed.success) {
     return actionError("VALIDATION", "Please check the form.", toFieldErrors(parsed.error));
   }
   try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-    if (error) return actionError("VALIDATION", error.message);
+    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    await prisma.profile.update({
+      where: { id: ctx.profile.id },
+      data: { passwordHash },
+    });
+    revalidatePath("/settings/profile");
     return actionOk(undefined);
   } catch (e) {
     return mapUnknownError(e);

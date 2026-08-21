@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FileUp, KeyRound, Loader2, Sparkles, Trash2, ChevronDown } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { FileDropzone } from "@/components/file-dropzone";
 import { GroqUsagePanel } from "./groq-usage-panel";
 import {
@@ -132,14 +131,6 @@ export function AiImportDialog({
       if (!req?.ok) {
         setPhase("upload");
         return toast.error(req?.error.message ?? "Gagal menyiapkan upload.");
-      }
-      const supabase = createClient();
-      const up = await supabase.storage
-        .from(req.data.bucket)
-        .upload(req.data.path, file, { contentType: file.type || undefined, upsert: false });
-      if (up.error) {
-        setPhase("upload");
-        return toast.error("Gagal mengunggah file.");
       }
       const res = await analyzeImportDocument({
         bucket: req.data.bucket,

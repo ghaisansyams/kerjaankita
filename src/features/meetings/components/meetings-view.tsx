@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { FileAudio, Loader2, Mic, Plus, Search, UploadCloud } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { FileDropzone } from "@/components/file-dropzone";
 import { createMeeting, requestMeetingUpload } from "../actions";
 import { Button } from "@/components/ui/button";
@@ -118,14 +117,6 @@ export function MeetingsView({ meetings, sttEnabled }: { meetings: MeetingVM[]; 
       const req = await requestMeetingUpload({ fileName: file.name, fileType: file.type });
       if (!req?.ok) {
         toast.error(req?.error.message ?? "Gagal menyiapkan upload.");
-        return;
-      }
-      const supabase = createClient();
-      const up = await supabase.storage
-        .from(req.data.bucket)
-        .upload(req.data.path, file, { contentType: file.type || undefined, upsert: false });
-      if (up.error) {
-        toast.error("Gagal mengunggah audio.");
         return;
       }
       const res = await createMeeting({

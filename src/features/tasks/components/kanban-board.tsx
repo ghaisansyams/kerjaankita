@@ -20,7 +20,6 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import type { ActionResult } from "@/types/action";
 import { createTask, moveTask, updateTaskProgress } from "../actions";
 import {
@@ -123,43 +122,15 @@ export function KanbanBoard({
     }
   }, [projectId]);
 
-  // Realtime: task changes reconcile the cards; workflow_statuses changes
-  // (another manager editing columns) re-fetch the whole board.
+  // Polling for board updates when tab is active
   useEffect(() => {
-    const supabase = createClient();
-    let t1: ReturnType<typeof setTimeout> | null = null;
-    let t2: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase
-      .channel(`board:${projectId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "tasks", filter: `project_id=eq.${projectId}` },
-        () => {
-          if (t1) clearTimeout(t1);
-          t1 = setTimeout(() => {
-            if (!draggingRef.current && !mutatingRef.current) refetch();
-          }, 250);
-        },
-      );
-    if (workflowId) {
-      channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "workflow_statuses", filter: `workflow_id=eq.${workflowId}` },
-        () => {
-          if (t2) clearTimeout(t2);
-          t2 = setTimeout(() => {
-            if (!draggingRef.current && !mutatingRef.current) router.refresh();
-          }, 300);
-        },
-      );
-    }
-    channel.subscribe();
-    return () => {
-      if (t1) clearTimeout(t1);
-      if (t2) clearTimeout(t2);
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, workflowId, refetch, router]);
+    const interval = setInterval(() => {
+      if (!draggingRef.current && !mutatingRef.current && document.visibilityState === "visible") {
+        refetch();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),

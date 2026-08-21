@@ -1,82 +1,178 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
-import type { DbEnums, Json } from "@/types/database.types";
+import { prisma } from "@/lib/prisma";
+import { getUser } from "@/lib/auth";
+import type { EntityType, Prisma } from "@prisma/client";
 
 /**
- * Append an activity entry via the SECURITY DEFINER `log_activity` function.
- * The activities table has no INSERT policy — only this function (and triggers)
- * may write to the audit trail.
+ * Append an activity entry to the audit trail.
  */
 export async function logActivity(params: {
   organizationId: string;
   projectId: string | null;
-  entity: DbEnums<"entity_type">;
+  entity: EntityType | "organization" | "workspace" | "team" | "account" | "contact" | "project" | "milestone" | "task" | "mom";
   entityId: string;
   action: string;
-  metadata?: Json;
+  metadata?: Prisma.InputJsonValue;
   guestVisible?: boolean;
+  actorId?: string | null;
 }) {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("log_activity", {
-    p_org: params.organizationId,
-    p_project: params.projectId,
-    p_entity: params.entity,
-    p_entity_id: params.entityId,
-    p_action: params.action,
-    p_metadata: (params.metadata ?? {}) as Json,
-    p_guest_visible: params.guestVisible ?? false,
-  });
-  // Audit failures must never break the user's action — log and move on.
-  if (error) console.error("[log_activity]", error.message);
+  try {
+    let actorId = params.actorId;
+    if (actorId === undefined) {
+      const user = await getUser();
+      actorId = user?.id ?? null;
+    }
+    await prisma.activity.create({
+      data: {
+        organizationId: params.organizationId,
+        projectId: params.projectId,
+        entity: params.entity as EntityType,
+        entityId: params.entityId,
+        action: params.action,
+        metadata: params.metadata ?? {},
+        isGuestVisible: params.guestVisible ?? false,
+        actorId,
+      },
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[log_activity]", msg);
+  }
 }
 
-/** All activity for a task (drives the Activity Timeline). RLS-scoped. */
+/** All activity for a task (drives the Activity Timeline). */
 export async function listTaskActivities(taskId: string, limit = 100) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("activities")
-    .select(
-      "id, action, metadata, actor_id, created_at, actor:profiles(id, full_name, avatar_url)",
-    )
-    .eq("entity", "task")
-    .eq("entity_id", taskId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data;
+  const data = await prisma.activity.findMany({
+    where: {
+      entity: "task",
+      entityId: taskId,
+    },
+    select: {
+      id: true,
+      action: true,
+      metadata: true,
+      actorId: true,
+      createdAt: true,
+      actor: {
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    action: d.action,
+    metadata: d.metadata,
+    actor_id: d.actorId,
+    created_at: d.createdAt.toISOString(),
+    actor: d.actor
+      ? {
+          id: d.actor.id,
+          full_name: d.actor.fullName,
+          avatar_url: d.actor.avatarUrl,
+        }
+      : null,
+  }));
 }
 
 export type ActivityRow = Awaited<ReturnType<typeof listTaskActivities>>[number];
 
-/** Most recent org-wide activity for the dashboard feed (RLS-scoped). */
+/** Most recent org-wide activity for the dashboard feed. */
 export async function listRecentActivities(orgId: string, limit = 12) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("activities")
-    .select(
-      "id, action, entity, entity_id, metadata, created_at, actor:profiles(id, full_name, avatar_url)",
-    )
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.activity.findMany({
+    where: {
+      organizationId: orgId,
+    },
+    select: {
+      id: true,
+      action: true,
+      entity: true,
+      entityId: true,
+      metadata: true,
+      createdAt: true,
+      actor: {
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    action: d.action,
+    entity: d.entity,
+    entity_id: d.entityId,
+    metadata: d.metadata,
+    created_at: d.createdAt.toISOString(),
+    actor: d.actor
+      ? {
+          id: d.actor.id,
+          full_name: d.actor.fullName,
+          avatar_url: d.actor.avatarUrl,
+        }
+      : null,
+  }));
 }
 
 export type RecentActivityRow = Awaited<ReturnType<typeof listRecentActivities>>[number];
 
 /**
- * Recent activity for a single project (RLS-scoped). Guests receive only the
- * `is_guest_visible` subset, so this doubles as the portal's "recent updates".
+ * Recent activity for a single project.
  */
 export async function listProjectActivities(projectId: string, limit = 20) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("activities")
-    .select("id, action, entity, entity_id, metadata, created_at, actor:profiles(id, full_name, avatar_url)")
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.activity.findMany({
+    where: {
+      projectId,
+    },
+    select: {
+      id: true,
+      action: true,
+      entity: true,
+      entityId: true,
+      metadata: true,
+      createdAt: true,
+      actor: {
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    action: d.action,
+    entity: d.entity,
+    entity_id: d.entityId,
+    metadata: d.metadata,
+    created_at: d.createdAt.toISOString(),
+    actor: d.actor
+      ? {
+          id: d.actor.id,
+          full_name: d.actor.fullName,
+          avatar_url: d.actor.avatarUrl,
+        }
+      : null,
+  }));
 }

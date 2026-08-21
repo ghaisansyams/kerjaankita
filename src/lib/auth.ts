@@ -2,15 +2,28 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/env";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { isDatabaseConfigured } from "@/lib/env";
 import { ACTIVE_ORG_COOKIE, type PermissionKey } from "@/constants";
-import type { Tables } from "@/types/database.types";
+import type {
+  Profile as PrismaProfile,
+  Organization as PrismaOrganization,
+  OrganizationMember as PrismaOrganizationMember,
+  Role as PrismaRole,
+} from "@prisma/client";
 
-export type Profile = Tables<"profiles">;
-export type Organization = Tables<"organizations">;
-export type Membership = Tables<"organization_members">;
-export type Role = Tables<"roles">;
+export type Profile = PrismaProfile & {
+  full_name: string | null;
+  avatar_url: string | null;
+};
+
+export type Organization = PrismaOrganization & {
+  logo_url: string | null;
+};
+
+export type Membership = PrismaOrganizationMember;
+export type Role = PrismaRole;
 
 /** A membership joined with its organization and role. */
 export type MembershipWithOrg = Membership & {
@@ -27,8 +40,7 @@ export type OrgContext = {
   organization: Organization;
   membership: Membership;
   role: Role | null;
-  /** Organization-scoped permission keys. Workspace/project-scoped rights are
-   *  resolved in the database by has_permission() at query time. */
+  /** Organization-scoped permission keys. */
   permissions: Set<string>;
   isGuest: boolean;
 };
@@ -37,27 +49,40 @@ export type OrgContext = {
 /*  Identity                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export const getUser = cache(async () => {
-  // Before Supabase is connected, don't construct a client (it would throw).
-  if (!isSupabaseConfigured) return null;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+export type AuthUser = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  image?: string | null;
+};
+
+export const getUser = cache(async (): Promise<AuthUser | null> => {
+  if (!isDatabaseConfigured) return null;
+  const session = await auth();
+  if (!session?.user?.id) return null;
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    image: session.user.image,
+  };
 });
 
 export const getProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser();
   if (!user) return null;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .is("deleted_at", null)
-    .single();
-  return data ?? null;
+  const profile = await prisma.profile.findFirst({
+    where: {
+      id: user.id,
+      deletedAt: null,
+    },
+  });
+  if (!profile) return null;
+  return {
+    ...profile,
+    full_name: profile.fullName,
+    avatar_url: profile.avatarUrl,
+  };
 });
 
 export async function requireProfile(): Promise<Profile> {
@@ -74,14 +99,26 @@ export async function requireProfile(): Promise<Profile> {
 export const getMemberships = cache(async (): Promise<MembershipWithOrg[]> => {
   const user = await getUser();
   if (!user) return [];
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("organization_members")
-    .select("*, organization:organizations(*), role:roles(*)")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .is("deleted_at", null);
-  return (data as MembershipWithOrg[] | null) ?? [];
+  const list = await prisma.organizationMember.findMany({
+    where: {
+      userId: user.id,
+      status: "active",
+      deletedAt: null,
+    },
+    include: {
+      organization: true,
+      role: true,
+    },
+  });
+  return list.map((m) => ({
+    ...m,
+    organization: m.organization
+      ? {
+          ...m.organization,
+          logo_url: m.organization.logoUrl,
+        }
+      : null,
+  }));
 });
 
 /**
@@ -100,20 +137,24 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
   const preferred = cookieStore.get(ACTIVE_ORG_COOKIE)?.value;
 
   const membership =
-    memberships.find((m) => m.organization_id === preferred) ?? memberships[0];
+    memberships.find((m) => m.organizationId === preferred) ?? memberships[0];
   if (!membership.organization) return null;
 
-  const supabase = await createClient();
-  const { data: perms } = await supabase
-    .from("role_permissions")
-    .select("permission:permissions(key)")
-    .eq("role_id", membership.role_id);
+  let permissions = new Set<string>();
+  if (membership.roleId) {
+    const perms = await prisma.rolePermission.findMany({
+      where: {
+        roleId: membership.roleId,
+      },
+      include: {
+        permission: true,
+      },
+    });
 
-  const permissions = new Set<string>(
-    (perms ?? [])
-      .map((p) => p.permission?.key)
-      .filter((k): k is string => Boolean(k)),
-  );
+    permissions = new Set<string>(
+      perms.map((p) => p.permission.key).filter(Boolean),
+    );
+  }
 
   return {
     profile,
@@ -121,7 +162,7 @@ export const getOrgContext = cache(async (): Promise<OrgContext | null> => {
     membership,
     role: membership.role,
     permissions,
-    isGuest: membership.member_type === "guest",
+    isGuest: membership.memberType === "guest",
   };
 });
 
@@ -144,7 +185,6 @@ export function can(ctx: OrgContext, permission: PermissionKey): boolean {
 
 /**
  * Route guard. Redirects rather than throwing so navigation stays smooth.
- * This is a UX layer — RLS remains the actual enforcement boundary.
  */
 export async function requirePermission(
   permission: PermissionKey,

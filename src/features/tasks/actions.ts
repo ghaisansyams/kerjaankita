@@ -19,7 +19,6 @@ import { getStatusCategory } from "@/repositories/workflow.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { TablesInsert, TablesUpdate } from "@/types/database.types";
 import { buildTaskDrawerData } from "./task-drawer-data";
 import type { TaskDrawerData } from "./components/task-drawer";
 
@@ -65,25 +64,20 @@ export async function createTask(
   }
   try {
     const id = crypto.randomUUID();
-    const values: TablesInsert<"tasks"> = {
+    await taskRepo.insertTask({
       id,
-      organization_id: ctx.organization.id,
-      project_id: d.projectId,
+      organizationId: ctx.organization.id,
+      projectId: d.projectId,
       title: d.title,
       description: d.description ?? null,
       priority: d.priority ?? "medium",
-      assignee_id: d.assigneeId ?? null,
-      reporter_id: ctx.profile.id,
-      start_date: d.startDate ?? null,
-      due_date: d.dueDate ?? null,
-      estimated_hours: d.estimatedHours ?? null,
-      // When created from a specific board column, land there; otherwise the
-      // trigger picks the workflow's initial status.
-      status_id: d.statusId ?? null,
-    };
-    // number, workflow, initial status (when null), org, activity + assignment
-    // notification are all set by triggers.
-    await taskRepo.insertTask(values);
+      assigneeId: d.assigneeId ?? null,
+      reporterId: ctx.profile.id,
+      startDate: d.startDate ?? null,
+      dueDate: d.dueDate ?? null,
+      estimatedHours: d.estimatedHours ?? null,
+      statusId: d.statusId ?? null,
+    });
     revalidateTasks(d.projectId);
     return actionOk({ id });
   } catch (e) {
@@ -98,20 +92,20 @@ export async function updateTask(input: unknown): Promise<ActionResult> {
     return actionError("VALIDATION", "Please check the form.", toFieldErrors(parsed.error));
   }
   const { id, ...d } = parsed.data;
-  const patch: TablesUpdate<"tasks"> = {};
+  const patch: taskRepo.UpdateTaskInput = {};
   if (d.title !== undefined) patch.title = d.title;
   if (d.description !== undefined) patch.description = d.description ?? null;
   if (d.priority !== undefined) patch.priority = d.priority;
-  if (d.assigneeId !== undefined) patch.assignee_id = d.assigneeId ?? null;
-  if (d.startDate !== undefined) patch.start_date = d.startDate ?? null;
-  if (d.dueDate !== undefined) patch.due_date = d.dueDate ?? null;
-  if (d.estimatedHours !== undefined) patch.estimated_hours = d.estimatedHours ?? null;
-  if (d.actualHours !== undefined) patch.actual_hours = d.actualHours ?? null;
-  if (d.githubPrUrl !== undefined) patch.github_pr_url = d.githubPrUrl ?? null;
-  if (d.figmaUrl !== undefined) patch.figma_url = d.figmaUrl ?? null;
-  if (d.stagingUrl !== undefined) patch.staging_url = d.stagingUrl ?? null;
-  if (d.productionUrl !== undefined) patch.production_url = d.productionUrl ?? null;
-  if (d.evidenceNotes !== undefined) patch.evidence_notes = d.evidenceNotes ?? null;
+  if (d.assigneeId !== undefined) patch.assigneeId = d.assigneeId ?? null;
+  if (d.startDate !== undefined) patch.startDate = d.startDate ?? null;
+  if (d.dueDate !== undefined) patch.dueDate = d.dueDate ?? null;
+  if (d.estimatedHours !== undefined) patch.estimatedHours = d.estimatedHours ?? null;
+  if (d.actualHours !== undefined) patch.actualHours = d.actualHours ?? null;
+  if (d.githubPrUrl !== undefined) patch.githubPrUrl = d.githubPrUrl ?? null;
+  if (d.figmaUrl !== undefined) patch.figmaUrl = d.figmaUrl ?? null;
+  if (d.stagingUrl !== undefined) patch.stagingUrl = d.stagingUrl ?? null;
+  if (d.productionUrl !== undefined) patch.productionUrl = d.productionUrl ?? null;
+  if (d.evidenceNotes !== undefined) patch.evidenceNotes = d.evidenceNotes ?? null;
 
   try {
     // RLS (task.update.any OR assignee+own) + the column-guard trigger are
@@ -139,9 +133,9 @@ export async function updateTaskStatus(input: unknown): Promise<ActionResult> {
         reason: ["Please say why this is blocked."],
       });
     }
-    const patch: TablesUpdate<"tasks"> = {
-      status_id: statusId,
-      blocked_reason: category === "blocked" ? (reason?.trim() ?? null) : null,
+    const patch: taskRepo.UpdateTaskInput = {
+      statusId,
+      blockedReason: category === "blocked" ? (reason?.trim() ?? null) : null,
     };
     // The workflow-transition trigger rejects illegal moves (→ check_violation
     // → TRANSITION_NOT_ALLOWED). status_changed/blocked/done side-effects,
@@ -189,10 +183,10 @@ export async function moveTask(input: unknown): Promise<ActionResult> {
   const { id, statusId, position } = parsed.data;
   try {
     const category = await getStatusCategory(statusId);
-    const patch: TablesUpdate<"tasks"> = { status_id: statusId, position };
+    const patch: taskRepo.UpdateTaskInput = { statusId, position };
     // Leaving the blocked column clears the reason; entering it from the board
     // keeps whatever reason exists (the drawer is where reasons are captured).
-    if (category !== "blocked") patch.blocked_reason = null;
+    if (category !== "blocked") patch.blockedReason = null;
     const updated = await taskRepo.updateTask(id, patch);
     if (!updated) return actionError("FORBIDDEN", "You can't move this task.");
     revalidateTasks(updated.project_id as string);

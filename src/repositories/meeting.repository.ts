@@ -1,115 +1,323 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
-// meeting_* tables aren't in the generated Database types yet — permissive
-// client (same pattern as MOM / import planning).
-async function db(): Promise<SupabaseClient> {
-  return (await createClient()) as unknown as SupabaseClient;
+export interface InsertMeetingInput {
+  id?: string;
+  organization_id?: string;
+  organizationId?: string;
+  workspace_id?: string | null;
+  workspaceId?: string | null;
+  project_id?: string | null;
+  projectId?: string | null;
+  title: string;
+  description?: string | null;
+  meeting_date?: string | null;
+  meetingDate?: string | null;
+  meeting_time?: string | null;
+  meetingTime?: string | null;
+  location?: string | null;
+  meeting_type?: string | null;
+  meetingType?: string | null;
+  audio_bucket?: string;
+  audioBucket?: string;
+  audio_path?: string | null;
+  audioPath?: string | null;
+  audio_file_name?: string | null;
+  audioFileName?: string | null;
+  audio_mime_type?: string | null;
+  audioMimeType?: string | null;
+  audio_size_bytes?: number | bigint | null;
+  audioSizeBytes?: number | bigint | null;
+  duration_seconds?: number | null;
+  durationSeconds?: number | null;
+  status?: string;
+  is_private?: boolean;
+  isPrivate?: boolean;
+  created_by?: string | null;
+  createdBy?: string | null;
+  updated_by?: string | null;
+  updatedBy?: string | null;
 }
-function admin(): SupabaseClient {
-  return createAdminClient() as unknown as SupabaseClient;
-}
 
-export type MeetingRow = Record<string, unknown>;
-
-export async function insertMeetingRecord(values: Record<string, unknown>): Promise<string> {
-  const supabase = await db();
-  const { data, error } = await supabase.from("meeting_records").insert(values).select("id").single();
-  if (error) throw error;
-  return (data as { id: string }).id;
+export async function insertMeetingRecord(values: InsertMeetingInput): Promise<string> {
+  const size = values.audioSizeBytes !== undefined ? values.audioSizeBytes : values.audio_size_bytes;
+  const data = await prisma.meetingRecord.create({
+    data: {
+      id: values.id,
+      organizationId: values.organizationId || values.organization_id!,
+      workspaceId: values.workspaceId !== undefined ? values.workspaceId : values.workspace_id,
+      projectId: values.projectId !== undefined ? values.projectId : values.project_id,
+      title: values.title,
+      description: values.description,
+      meetingDate: values.meetingDate ? new Date(values.meetingDate) : values.meeting_date ? new Date(values.meeting_date) : undefined,
+      meetingTime: values.meetingTime || values.meeting_time,
+      location: values.location,
+      meetingType: values.meetingType || values.meeting_type,
+      audioBucket: values.audioBucket || values.audio_bucket || "meeting-recordings",
+      audioPath: values.audioPath || values.audio_path,
+      audioFileName: values.audioFileName || values.audio_file_name,
+      audioMimeType: values.audioMimeType || values.audio_mime_type,
+      audioSizeBytes: size ? BigInt(size) : undefined,
+      durationSeconds: values.durationSeconds !== undefined ? values.durationSeconds : values.duration_seconds,
+      status: values.status || "uploaded",
+      isPrivate: values.isPrivate ?? values.is_private ?? false,
+      createdBy: values.createdBy || values.created_by,
+      updatedBy: values.updatedBy || values.updated_by,
+    },
+    select: { id: true },
+  });
+  return data.id;
 }
 
 export async function listMeetingRecords(orgId: string) {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("meeting_records")
-    .select(
-      "id, title, meeting_date, status, duration_seconds, audio_size_bytes, audio_file_name, project_id, is_private, created_at, created_by",
-    )
-    .eq("organization_id", orgId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data as MeetingRow[]) ?? [];
+  const data = await prisma.meetingRecord.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      meetingDate: true,
+      status: true,
+      durationSeconds: true,
+      audioSizeBytes: true,
+      audioFileName: true,
+      projectId: true,
+      isPrivate: true,
+      createdAt: true,
+      createdBy: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    title: d.title,
+    meeting_date: d.meetingDate ? d.meetingDate.toISOString().split("T")[0] : null,
+    status: d.status,
+    duration_seconds: d.durationSeconds,
+    audio_size_bytes: d.audioSizeBytes ? Number(d.audioSizeBytes) : null,
+    audio_file_name: d.audioFileName,
+    project_id: d.projectId,
+    is_private: d.isPrivate,
+    created_at: d.createdAt.toISOString(),
+    created_by: d.createdBy,
+  }));
 }
 
-export async function getMeetingRecord(id: string): Promise<MeetingRow | null> {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("meeting_records")
-    .select("*")
-    .eq("id", id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as MeetingRow) ?? null;
+export async function getMeetingRecord(id: string) {
+  const d = await prisma.meetingRecord.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+    },
+    include: {
+      transcripts: true,
+    },
+  });
+
+  if (!d) return null;
+
+  const t = d.transcripts[0] ?? null;
+
+  return {
+    id: d.id,
+    organization_id: d.organizationId,
+    workspace_id: d.workspaceId,
+    project_id: d.projectId,
+    title: d.title,
+    description: d.description,
+    meeting_date: d.meetingDate ? d.meetingDate.toISOString().split("T")[0] : null,
+    meeting_time: d.meetingTime,
+    location: d.location,
+    meeting_type: d.meetingType,
+    audio_bucket: d.audioBucket,
+    audio_path: d.audioPath,
+    audio_file_name: d.audioFileName,
+    audio_mime_type: d.audioMimeType,
+    audio_size_bytes: d.audioSizeBytes ? Number(d.audioSizeBytes) : null,
+    duration_seconds: d.durationSeconds,
+    status: d.status,
+    error: d.error,
+    is_private: d.isPrivate,
+    created_by: d.createdBy,
+    created_at: d.createdAt.toISOString(),
+    updated_at: d.updatedAt.toISOString(),
+    transcript: t ? {
+      id: t.id,
+      content: t.content,
+      raw_content: t.rawContent,
+      provider: t.provider,
+      model: t.model,
+      language: t.language,
+      segments: t.segments,
+      created_at: t.createdAt.toISOString(),
+    } : null,
+    mom: null,
+  };
 }
 
-export async function getTranscript(meetingId: string): Promise<MeetingRow | null> {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("meeting_transcripts")
-    .select("id, content, raw_content, language, provider, model, updated_at")
-    .eq("meeting_id", meetingId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as MeetingRow) ?? null;
+export type MeetingDetail = NonNullable<Awaited<ReturnType<typeof getMeetingRecord>>>;
+export type MeetingRow = MeetingDetail;
+
+export interface UpdateMeetingInput {
+  title?: string;
+  description?: string | null;
+  status?: string;
+  error?: string | null;
+  duration_seconds?: number | null;
+  durationSeconds?: number | null;
+  audio_path?: string | null;
+  audioPath?: string | null;
+  audio_file_name?: string | null;
+  audioFileName?: string | null;
+  audio_mime_type?: string | null;
+  audioMimeType?: string | null;
+  audio_size_bytes?: number | bigint | null;
+  audioSizeBytes?: number | bigint | null;
 }
 
-export async function saveTranscriptContent(meetingId: string, content: string, updatedBy: string) {
-  const supabase = await db();
-  const { error } = await supabase
-    .from("meeting_transcripts")
-    .update({ content, updated_at: new Date().toISOString(), updated_by: updatedBy })
-    .eq("meeting_id", meetingId);
-  if (error) throw error;
-}
-
-export async function softDeleteMeeting(id: string, deletedBy: string) {
-  const supabase = await db();
-  const { data, error } = await supabase
-    .from("meeting_records")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: deletedBy })
-    .eq("id", id)
-    .is("deleted_at", null)
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
+export async function updateMeetingRecord(id: string, patch: UpdateMeetingInput) {
+  const size = patch.audioSizeBytes !== undefined ? patch.audioSizeBytes : patch.audio_size_bytes;
+  const data = await prisma.meetingRecord.update({
+    where: { id },
+    data: {
+      title: patch.title,
+      description: patch.description,
+      status: patch.status,
+      error: patch.error,
+      durationSeconds: patch.durationSeconds !== undefined ? patch.durationSeconds : patch.duration_seconds,
+      audioPath: patch.audioPath !== undefined ? patch.audioPath : patch.audio_path,
+      audioFileName: patch.audioFileName !== undefined ? patch.audioFileName : patch.audio_file_name,
+      audioMimeType: patch.audioMimeType !== undefined ? patch.audioMimeType : patch.audio_mime_type,
+      audioSizeBytes: size ? BigInt(size) : undefined,
+    },
+    select: { id: true },
+  });
   return data;
 }
 
-// ----- pipeline (admin — runs after the action authorizes the caller) -------
+export async function softDeleteMeetingRecord(id: string, deletedBy: string) {
+  const data = await prisma.meetingRecord.update({
+    where: { id },
+    data: {
+      deletedAt: new Date(),
+      deletedBy,
+    },
+    select: { id: true },
+  });
+  return data;
+}
+
+export const softDeleteMeeting = softDeleteMeetingRecord;
+
+export async function getTranscript(meetingId: string) {
+  const d = await prisma.meetingTranscript.findUnique({
+    where: { meetingId },
+  });
+  if (!d) return null;
+  return {
+    id: d.id,
+    meeting_id: d.meetingId,
+    content: d.content,
+    raw_content: d.rawContent,
+    provider: d.provider,
+    model: d.model,
+    language: d.language,
+    segments: d.segments,
+    created_at: d.createdAt.toISOString(),
+  };
+}
+
+export async function saveTranscriptContent(meetingId: string, content: string, updatedBy?: string) {
+  const meeting = await prisma.meetingRecord.findUnique({
+    where: { id: meetingId },
+    select: { organizationId: true },
+  });
+  if (!meeting) return null;
+
+  return await prisma.meetingTranscript.upsert({
+    where: { meetingId },
+    update: { content },
+    create: {
+      meetingId,
+      organizationId: meeting.organizationId,
+      content,
+      updatedBy,
+    },
+  });
+}
+
+// ----- pipeline -------------------------------------------------------------
 export async function adminGetMeeting(id: string): Promise<MeetingRow | null> {
-  const { data, error } = await admin().from("meeting_records").select("*").eq("id", id).maybeSingle();
-  if (error) throw error;
-  return (data as MeetingRow) ?? null;
+  return getMeetingRecord(id);
 }
 
-export async function adminUpdateMeeting(id: string, patch: Record<string, unknown>) {
-  const { error } = await admin()
-    .from("meeting_records")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw error;
+export async function adminUpdateMeeting(id: string, patch: UpdateMeetingInput) {
+  return updateMeetingRecord(id, patch);
 }
 
-export async function adminUpsertTranscript(values: Record<string, unknown>) {
-  const { error } = await admin()
-    .from("meeting_transcripts")
-    .upsert(values, { onConflict: "meeting_id" });
-  if (error) throw error;
+export interface UpsertTranscriptInput {
+  id?: string;
+  meeting_id?: string;
+  meetingId?: string;
+  organization_id?: string;
+  organizationId?: string;
+  content?: string;
+  raw_content?: string | null;
+  rawContent?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  language?: string | null;
+  segments?: Prisma.InputJsonValue;
+  updated_by?: string;
+  updatedBy?: string;
+  updated_at?: string;
+  updatedAt?: string;
 }
 
-export async function adminSignedAudioUrl(bucket: string, path: string, ttl = 3600): Promise<string | null> {
-  const { data, error } = await admin().storage.from(bucket).createSignedUrl(path, ttl);
-  if (error) return null;
-  return data?.signedUrl ?? null;
+export async function adminUpsertTranscript(values: UpsertTranscriptInput) {
+  const meetingId = (values.meetingId || values.meeting_id)!;
+  const organizationId = (values.organizationId || values.organization_id)!;
+  await prisma.meetingTranscript.upsert({
+    where: { meetingId },
+    update: {
+      content: values.content || "",
+      rawContent: values.rawContent !== undefined ? values.rawContent : values.raw_content,
+      provider: values.provider,
+      model: values.model,
+      language: values.language,
+      segments: values.segments,
+      updatedBy: values.updatedBy || values.updated_by,
+    },
+    create: {
+      id: values.id,
+      meetingId,
+      organizationId,
+      content: values.content || "",
+      rawContent: values.rawContent !== undefined ? values.rawContent : values.raw_content,
+      provider: values.provider,
+      model: values.model,
+      language: values.language,
+      segments: values.segments,
+      updatedBy: values.updatedBy || values.updated_by,
+    },
+  });
 }
 
-export async function adminDownloadAudio(bucket: string, path: string): Promise<Buffer> {
-  const { data, error } = await admin().storage.from(bucket).download(path);
-  if (error || !data) throw error ?? new Error("Audio not found");
-  return Buffer.from(await data.arrayBuffer());
+export async function adminSignedAudioUrl(bucket?: string, path?: string, ttl = 3600): Promise<string | null> {
+  void bucket;
+  void path;
+  void ttl;
+  return null;
+}
+
+export async function adminDownloadAudio(bucket?: string, path?: string): Promise<Buffer> {
+  void bucket;
+  void path;
+  throw new Error("Storage audio download will use storage provider");
 }

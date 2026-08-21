@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import { workspaceFormSchema, type WorkspaceFormValues } from "@/schemas/workspace.schema";
 import { updateWorkspace, updateWorkspaceLogo } from "../actions";
 import {
@@ -32,13 +31,12 @@ type WorkflowOption = { id: string; name: string };
 
 export function WorkspaceForm({
   workspaceId,
-  orgId,
   initial,
   logoUrl,
   workflows,
 }: {
   workspaceId: string;
-  orgId: string;
+  orgId?: string;
   initial: WorkspaceFormValues;
   logoUrl: string | null;
   workflows: WorkflowOption[];
@@ -79,27 +77,30 @@ export function WorkspaceForm({
 
   async function onLogo(file: File | undefined) {
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image size must be less than 2MB");
+      return;
+    }
     setUploadingLogo(true);
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() || "png";
-      const path = `${orgId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage
-        .from("branding")
-        .upload(path, file, { upsert: true, contentType: file.type || undefined });
-      if (error) {
-        toast.error("Upload failed");
-        return;
-      }
-      const { data } = supabase.storage.from("branding").getPublicUrl(path);
-      const r = await updateWorkspaceLogo({ id: workspaceId, logoUrl: data.publicUrl });
-      if (r?.ok) {
-        setLogo(data.publicUrl);
-        toast.success("Logo updated");
-      } else {
-        toast.error(r?.error.message ?? "Couldn't save logo");
-      }
-    } finally {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        const r = await updateWorkspaceLogo({ id: workspaceId, logoUrl: dataUrl });
+        if (r?.ok) {
+          setLogo(dataUrl);
+          toast.success("Logo updated");
+        } else {
+          toast.error(r?.error.message ?? "Couldn't save logo");
+        }
+        setUploadingLogo(false);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read image file");
+        setUploadingLogo(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
       setUploadingLogo(false);
       if (inputRef.current) inputRef.current.value = "";
     }

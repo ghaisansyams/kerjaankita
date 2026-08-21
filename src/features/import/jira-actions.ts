@@ -9,13 +9,11 @@ import { JiraError, jiraMyself, jiraProjects, jiraSearchIssues } from "@/service
 import { mapJiraIssue } from "@/services/jira/map";
 import * as projectRepo from "@/repositories/project.repository";
 import * as taskRepo from "@/repositories/task.repository";
-import { createClient } from "@/lib/supabase/server";
 import { PROJECT_COLORS } from "@/constants";
 import { revalidatePath } from "next/cache";
 import { mapUnknownError } from "@/lib/errors";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
 import type { ImportPreviewTask } from "./actions";
-import type { TablesInsert } from "@/types/database.types";
 
 /** Same ceiling the document importer uses, so one review screen behaves alike. */
 const MAX_ISSUES = 100;
@@ -142,13 +140,8 @@ export async function createProjectFromJira(
   const d = parsed.data;
   const orgId = ctx.organization.id;
 
-  const sb = await createClient();
-  const { data: source } = await sb
-    .from("projects")
-    .select("workspace_id")
-    .eq("id", d.sourceProjectId)
-    .maybeSingle();
-  const workspaceId = (source as { workspace_id?: string } | null)?.workspace_id;
+  const source = await projectRepo.getProject(d.sourceProjectId);
+  const workspaceId = source?.workspace_id;
   if (!workspaceId) return actionError("NOT_FOUND", "Project not found.");
 
   if (!(await checkPermission(orgId, PERMISSIONS.PROJECT_CREATE, { workspaceId })))
@@ -156,31 +149,30 @@ export async function createProjectFromJira(
 
   try {
     const projectId = crypto.randomUUID();
-    const values: TablesInsert<"projects"> = {
+    await projectRepo.insertProject({
       id: projectId,
-      organization_id: orgId,
-      workspace_id: workspaceId,
+      organizationId: orgId,
+      workspaceId: workspaceId,
       name: d.name,
-      owner_id: ctx.profile.id,
+      ownerId: ctx.profile.id,
       visibility: "workspace",
       color: PROJECT_COLORS[0],
       // Jira keys are 2-10 chars; ours allows 2-6, so anything longer is dropped
       // rather than truncated into a key that collides with a real one.
       key: d.projectKey.length <= 6 ? d.projectKey : null,
       description: `Diimpor dari Jira (${d.projectKey}).`,
-    };
-    await projectRepo.insertProject(values);
+    });
 
     let count = 0;
     for (const t of d.tasks) {
       await taskRepo.insertTask({
         id: crypto.randomUUID(),
-        organization_id: orgId,
-        project_id: projectId,
+        organizationId: orgId,
+        projectId: projectId,
         title: t.title,
         description: t.description || null,
-        reporter_id: ctx.profile.id,
-      } satisfies TablesInsert<"tasks">);
+        reporterId: ctx.profile.id,
+      });
       count++;
     }
 

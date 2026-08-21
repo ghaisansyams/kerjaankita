@@ -12,10 +12,9 @@ import {
 } from "@/schemas/project.schema";
 import * as projectRepo from "@/repositories/project.repository";
 import { logActivity } from "@/repositories/activity.repository";
-import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
+import { mapUnknownError } from "@/lib/errors";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { Json, TablesInsert, TablesUpdate } from "@/types/database.types";
 
 export async function createProject(
   input: unknown,
@@ -36,21 +35,20 @@ export async function createProject(
   }
   try {
     const id = crypto.randomUUID();
-    const values: TablesInsert<"projects"> = {
+    await projectRepo.insertProject({
       id,
-      organization_id: ctx.organization.id,
-      workspace_id: d.workspaceId,
+      organizationId: ctx.organization.id,
+      workspaceId: d.workspaceId,
       name: d.name,
-      account_id: d.accountId ?? null,
-      owner_id: d.ownerId ?? ctx.profile.id,
+      accountId: d.accountId ?? null,
+      ownerId: d.ownerId ?? ctx.profile.id,
       visibility: d.visibility,
       color: d.color,
       key: d.key ?? null,
       description: d.description ?? null,
-      start_date: d.startDate ?? null,
-      end_date: d.endDate ?? null,
-    };
-    await projectRepo.insertProject(values);
+      startDate: d.startDate ?? null,
+      endDate: d.endDate ?? null,
+    });
     revalidatePath("/projects");
     return actionOk({ id });
   } catch (e) {
@@ -75,17 +73,17 @@ export async function updateProject(
     return actionError("FORBIDDEN", "You don't have permission to edit this project.");
   }
 
-  const patch: TablesUpdate<"projects"> = {};
+  const patch: projectRepo.UpdateProjectInput = {};
   if (d.name !== undefined) patch.name = d.name;
-  if (d.workspaceId !== undefined) patch.workspace_id = d.workspaceId;
-  if (d.accountId !== undefined) patch.account_id = d.accountId ?? null;
-  if (d.ownerId !== undefined) patch.owner_id = d.ownerId ?? null;
+  if (d.workspaceId !== undefined) patch.workspaceId = d.workspaceId;
+  if (d.accountId !== undefined) patch.accountId = d.accountId ?? null;
+  if (d.ownerId !== undefined) patch.ownerId = d.ownerId ?? null;
   if (d.visibility !== undefined) patch.visibility = d.visibility;
   if (d.color !== undefined) patch.color = d.color;
   if (d.key !== undefined) patch.key = d.key ?? null;
   if (d.description !== undefined) patch.description = d.description ?? null;
-  if (d.startDate !== undefined) patch.start_date = d.startDate ?? null;
-  if (d.endDate !== undefined) patch.end_date = d.endDate ?? null;
+  if (d.startDate !== undefined) patch.startDate = d.startDate ?? null;
+  if (d.endDate !== undefined) patch.endDate = d.endDate ?? null;
 
   try {
     const before = await projectRepo.getProject(id);
@@ -98,13 +96,13 @@ export async function updateProject(
     }
     // Audit payload: only the fields that changed, as from → to
     // (see docs/IMPLEMENTATION-NOTES.md §"Activity Log payload").
-    const beforeRec = before as unknown as Record<string, Json>;
+    const beforeRec = before as unknown as Record<string, unknown>;
     const changes = Object.entries(patch)
       .filter(([col, val]) => beforeRec[col] !== val)
       .map(([col, val]) => ({
         field: col,
-        from: (beforeRec[col] ?? null) as Json,
-        to: ((val as Json | undefined) ?? null) as Json,
+        from: (beforeRec[col] ?? null),
+        to: ((val as unknown | undefined) ?? null),
       }));
     await logActivity({
       organizationId: ctx.organization.id,
