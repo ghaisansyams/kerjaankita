@@ -1,103 +1,193 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
-/** Lean project rows for health/progress rollups (RLS-scoped). */
+/** Lean project rows for health/progress rollups. */
 export async function listProjectHealthRows(orgId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("projects")
-    .select("id, progress, start_date, end_date, is_archived")
-    .eq("organization_id", orgId)
-    .is("deleted_at", null);
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.project.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      progress: true,
+      startDate: true,
+      endDate: true,
+      isArchived: true,
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    progress: d.progress,
+    start_date: d.startDate ? d.startDate.toISOString().split("T")[0] : null,
+    end_date: d.endDate ? d.endDate.toISOString().split("T")[0] : null,
+    is_archived: d.isArchived,
+  }));
 }
 
 export type ProjectHealthRow = Awaited<ReturnType<typeof listProjectHealthRows>>[number];
 
 export async function countActiveMembers(orgId: string) {
-  const supabase = await createClient();
-  const { count, error } = await supabase
-    .from("organization_members")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .eq("status", "active");
-  if (error) throw error;
-  return count ?? 0;
+  const count = await prisma.organizationMember.count({
+    where: {
+      organizationId: orgId,
+      status: "active",
+      deletedAt: null,
+    },
+  });
+  return count;
 }
 
 /** Open (not completed, not deleted) task counts by due-date window. */
 export async function getTaskDueCounts(orgId: string, todayIso: string, weekEndIso: string) {
-  const supabase = await createClient();
-  const openTasks = () =>
-    supabase
-      .from("tasks")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .is("completed_at", null);
+  const baseWhere = {
+    organizationId: orgId,
+    deletedAt: null,
+    completedAt: null,
+  };
 
   const [dueToday, dueThisWeek, overdue, openAssigned] = await Promise.all([
-    openTasks().eq("due_date", todayIso),
-    openTasks().gte("due_date", todayIso).lte("due_date", weekEndIso),
-    openTasks().lt("due_date", todayIso),
-    openTasks().not("assignee_id", "is", null),
+    prisma.task.count({
+      where: {
+        ...baseWhere,
+        dueDate: {
+          gte: new Date(`${todayIso}T00:00:00.000Z`),
+          lte: new Date(`${todayIso}T23:59:59.999Z`),
+        },
+      },
+    }),
+    prisma.task.count({
+      where: {
+        ...baseWhere,
+        dueDate: {
+          gte: new Date(`${todayIso}T00:00:00.000Z`),
+          lte: new Date(`${weekEndIso}T23:59:59.999Z`),
+        },
+      },
+    }),
+    prisma.task.count({
+      where: {
+        ...baseWhere,
+        dueDate: {
+          lt: new Date(`${todayIso}T00:00:00.000Z`),
+        },
+      },
+    }),
+    prisma.task.count({
+      where: {
+        ...baseWhere,
+        assigneeId: { not: null },
+      },
+    }),
   ]);
 
-  for (const r of [dueToday, dueThisWeek, overdue, openAssigned]) {
-    if (r.error) throw r.error;
-  }
   return {
-    dueToday: dueToday.count ?? 0,
-    dueThisWeek: dueThisWeek.count ?? 0,
-    overdue: overdue.count ?? 0,
-    openAssigned: openAssigned.count ?? 0,
+    dueToday,
+    dueThisWeek,
+    overdue,
+    openAssigned,
   };
 }
 
 /** Tasks completed on/after `fromIso` (start of the current week). */
 export async function countCompletedSince(orgId: string, fromIso: string) {
-  const supabase = await createClient();
-  const { count, error } = await supabase
-    .from("tasks")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .is("deleted_at", null)
-    .gte("completed_at", fromIso);
-  if (error) throw error;
-  return count ?? 0;
+  const count = await prisma.task.count({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      completedAt: {
+        gte: new Date(fromIso),
+      },
+    },
+  });
+  return count;
 }
 
-/** The current user's open assigned tasks, for the "My Tasks" widget (RLS-scoped). */
+/** The current user's open assigned tasks, for the "My Tasks" widget. */
 export async function listMyOpenTasks(orgId: string, userId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tasks")
-    .select(
-      `id, number, title, due_date, progress, project_id,
-       status:workflow_statuses(name, color, category),
-       project:projects(name)`,
-    )
-    .eq("organization_id", orgId)
-    .eq("assignee_id", userId)
-    .is("deleted_at", null)
-    .is("completed_at", null)
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .limit(60);
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.task.findMany({
+    where: {
+      organizationId: orgId,
+      assigneeId: userId,
+      deletedAt: null,
+      completedAt: null,
+    },
+    select: {
+      id: true,
+      number: true,
+      title: true,
+      dueDate: true,
+      progress: true,
+      projectId: true,
+      status: {
+        select: {
+          name: true,
+          color: true,
+          category: true,
+        },
+      },
+      project: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      dueDate: "asc",
+    },
+    take: 60,
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    number: d.number,
+    title: d.title,
+    due_date: d.dueDate ? d.dueDate.toISOString().split("T")[0] : null,
+    progress: d.progress,
+    project_id: d.projectId,
+    status: d.status
+      ? {
+          name: d.status.name,
+          color: d.status.color,
+          category: d.status.category,
+        }
+      : null,
+    project: d.project
+      ? {
+          name: d.project.name,
+        }
+      : null,
+  }));
 }
 
 /** Open task load per member (assignee), for the Team Workload widget. */
 export async function listTeamWorkload(orgId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("assignee_id, assignee:profiles!tasks_assignee_id_fkey(full_name, avatar_url)")
-    .eq("organization_id", orgId)
-    .is("deleted_at", null)
-    .is("completed_at", null)
-    .not("assignee_id", "is", null);
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.task.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      completedAt: null,
+      assigneeId: { not: null },
+    },
+    select: {
+      assigneeId: true,
+      assignee: {
+        select: {
+          fullName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  return data.map((d) => ({
+    assignee_id: d.assigneeId,
+    assignee: d.assignee
+      ? {
+          full_name: d.assignee.fullName,
+          avatar_url: d.assignee.avatarUrl,
+        }
+      : null,
+  }));
 }

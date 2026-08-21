@@ -4,18 +4,18 @@ import { Brand } from "@/components/brand";
 const steps = [
   {
     icon: Database,
-    title: "Create a Supabase project",
-    body: "Sign in at supabase.com and create a new project. Then open the SQL Editor and run supabase/migrations/0001_init.sql followed by 0002_storage.sql.",
+    title: "Connect Neon Database",
+    body: "Ensure your Neon PostgreSQL connection string is configured in DATABASE_URL and DATABASE_URL_UNPOOLED.",
   },
   {
     icon: KeyRound,
-    title: "Add your keys",
-    body: "Copy .env.local.example to .env.local and paste in your Project URL, anon key, and service_role key (Project Settings → API).",
+    title: "Add NextAuth Secret",
+    body: "Set NEXTAUTH_SECRET and NEXTAUTH_URL in your .env.local configuration file.",
   },
   {
     icon: Rocket,
-    title: "Restart & sign up",
-    body: "Run npm run dev again. The first account you create automatically becomes the Super Admin of the workspace.",
+    title: "Restart & sign in",
+    body: "Run npm run dev again. You can sign up with an account or use pre-configured credentials.",
   },
 ];
 
@@ -29,8 +29,7 @@ export function SetupNotice() {
             Let&apos;s connect your database
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            KerjaanKita needs a Supabase project before you can sign in. Three quick
-            steps:
+            KerjaanKita needs a Neon PostgreSQL connection before you can sign in:
           </p>
 
           <ol className="mt-6 space-y-5">
@@ -50,10 +49,6 @@ export function SetupNotice() {
             ))}
           </ol>
         </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Full instructions live in{" "}
-          <code className="font-mono text-foreground">supabase/README.md</code>.
-        </p>
       </div>
     </main>
   );

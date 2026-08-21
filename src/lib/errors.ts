@@ -1,12 +1,11 @@
 import "server-only";
-import type { PostgrestError } from "@supabase/supabase-js";
+import { Prisma } from "@prisma/client";
 import { actionError, type ApiError, type ErrorCode } from "@/types/action";
 
 /**
- * Map a Postgres/PostgREST error to our error taxonomy. Never leak raw DB
- * messages to the UI (Engineering Standards §4, §11).
+ * Map a Prisma/Postgres error to our error taxonomy.
  */
-export function mapPostgrestError(error: PostgrestError): {
+export function mapPrismaError(error: Prisma.PrismaClientKnownRequestError): {
   ok: false;
   error: ApiError;
 } {
@@ -14,43 +13,35 @@ export function mapPostgrestError(error: PostgrestError): {
   let message = "Something went wrong. Please try again.";
 
   switch (error.code) {
-    case "23505": // unique_violation
+    case "P2002": // unique violation
       code = "CONFLICT";
-      message = "That already exists.";
+      message = "A record with this identifier already exists.";
       break;
-    case "23503": // foreign_key_violation
+    case "P2003": // foreign key violation
       code = "VALIDATION";
       message = "A referenced record was not found.";
       break;
-    case "23514": // check_violation (e.g. workflow transition guard)
-      code = "TRANSITION_NOT_ALLOWED";
-      message = "That change isn't allowed here.";
-      break;
-    case "P0001": // raise_exception (custom guards, e.g. last owner)
-      code = /owner/i.test(error.message) ? "LAST_OWNER" : "FORBIDDEN";
-      message = error.message;
-      break;
-    case "42501": // insufficient_privilege / RLS denial
-      code = "FORBIDDEN";
-      message = "You don't have permission to do that.";
+    case "P2025": // record not found
+      code = "NOT_FOUND";
+      message = "The requested record was not found.";
       break;
     default:
-      if (error.code?.startsWith("PGRST")) {
-        code = "NOT_FOUND";
-        message = "Record not found.";
-      }
+      message = "An error occurred while processing your request.";
   }
 
-  // Log the technical detail server-side; surface only the safe message.
-  console.error("[supabase]", error.code, error.message);
+  console.error("[database error]", error.code, error.message);
   return actionError(code, message);
 }
 
 /** Narrow an unknown thrown value to an ApiError result. */
 export function mapUnknownError(e: unknown): { ok: false; error: ApiError } {
-  if (e && typeof e === "object" && "code" in e && "message" in e) {
-    return mapPostgrestError(e as PostgrestError);
+  if (e instanceof Prisma.PrismaClientKnownRequestError) {
+    return mapPrismaError(e);
   }
-  console.error("[action]", e);
+  if (e instanceof Error) {
+    console.error("[action error]", e.message);
+    return actionError("INTERNAL", e.message || "Something went wrong. Please try again.");
+  }
+  console.error("[unknown error]", e);
   return actionError("INTERNAL", "Something went wrong. Please try again.");
 }

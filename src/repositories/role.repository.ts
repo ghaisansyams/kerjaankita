@@ -1,22 +1,42 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
-import type { DbEnums } from "@/types/database.types";
+import { prisma } from "@/lib/prisma";
+import type { RoleScope } from "@prisma/client";
 
 /** Roles available for a given scope: system roles + the tenant's own. */
 export async function listRoles(
   orgId: string,
-  scope: DbEnums<"role_scope">,
+  scope: RoleScope | "organization" | "workspace" | "project",
 ) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("roles")
-    .select("id, key, name, description, rank, organization_id")
-    .eq("scope", scope)
-    .or(`organization_id.is.null,organization_id.eq.${orgId}`)
-    .is("deleted_at", null)
-    .order("rank");
-  if (error) throw error;
-  return data;
+  const data = await prisma.role.findMany({
+    where: {
+      scope: scope as RoleScope,
+      deletedAt: null,
+      OR: [
+        { organizationId: null },
+        { organizationId: orgId },
+      ],
+    },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      rank: true,
+      organizationId: true,
+    },
+    orderBy: {
+      rank: "asc",
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    key: d.key,
+    name: d.name,
+    description: d.description,
+    rank: d.rank,
+    organization_id: d.organizationId,
+  }));
 }
 
 export type RoleOption = Awaited<ReturnType<typeof listRoles>>[number];

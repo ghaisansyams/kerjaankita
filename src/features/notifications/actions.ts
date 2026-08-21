@@ -2,27 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 import { requireOrgContext } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import {
   markNotificationReadSchema,
   setNotificationPreferenceSchema,
 } from "@/schemas/notification.schema";
+import { listNotifications } from "@/repositories/notification.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
 
+export async function fetchNotifications(limit = 15, unreadOnly = false) {
+  return await listNotifications(limit, unreadOnly);
+}
+
 export async function markNotificationRead(input: unknown): Promise<ActionResult> {
-  await requireOrgContext();
+  const ctx = await requireOrgContext();
   const parsed = markNotificationReadSchema.safeParse(input);
   if (!parsed.success) return actionError("VALIDATION", "Invalid request.");
   try {
-    const supabase = await createClient();
-    // RLS restricts the update to the caller's own notifications.
-    const { error } = await supabase
-      .from("notifications")
-      .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq("id", parsed.data.id);
-    if (error) throw error;
+    await prisma.notification.updateMany({
+      where: {
+        id: parsed.data.id,
+        userId: ctx.profile.id,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
     revalidatePath("/notifications");
     return actionOk(undefined);
   } catch (e) {
@@ -31,14 +39,18 @@ export async function markNotificationRead(input: unknown): Promise<ActionResult
 }
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {
-  await requireOrgContext();
+  const ctx = await requireOrgContext();
   try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq("is_read", false);
-    if (error) throw error;
+    await prisma.notification.updateMany({
+      where: {
+        userId: ctx.profile.id,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
     revalidatePath("/notifications");
     return actionOk(undefined);
   } catch (e) {
@@ -54,19 +66,26 @@ export async function setNotificationPreference(input: unknown): Promise<ActionR
   }
   const { type, inApp, email } = parsed.data;
   try {
-    const supabase = await createClient();
-    const { error } = await supabase.from("notification_preferences").upsert(
-      {
-        organization_id: ctx.organization.id,
-        user_id: ctx.profile.id,
-        type,
-        in_app: inApp,
-        email: email ?? false,
-        updated_at: new Date().toISOString(),
+    await prisma.notificationPreference.upsert({
+      where: {
+        organizationId_userId_type: {
+          organizationId: ctx.organization.id,
+          userId: ctx.profile.id,
+          type,
+        },
       },
-      { onConflict: "organization_id,user_id,type" },
-    );
-    if (error) throw error;
+      update: {
+        inApp,
+        email: email ?? false,
+      },
+      create: {
+        organizationId: ctx.organization.id,
+        userId: ctx.profile.id,
+        type,
+        inApp,
+        email: email ?? false,
+      },
+    });
     revalidatePath("/notifications");
     return actionOk(undefined);
   } catch (e) {

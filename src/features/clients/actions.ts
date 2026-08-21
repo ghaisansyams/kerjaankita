@@ -5,9 +5,10 @@ import { requireOrgContext } from "@/lib/auth";
 import { PERMISSIONS } from "@/constants";
 import { checkPermission } from "@/repositories/permission.repository";
 import * as accountRepo from "@/repositories/account.repository";
-import { createAdminClient } from "@/lib/supabase/admin";
 import * as inviteRepo from "@/repositories/invitation.repository";
 import { logActivity } from "@/repositories/activity.repository";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 import {
   createAccountSchema,
   updateAccountSchema,
@@ -18,7 +19,6 @@ import {
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { TablesInsert } from "@/types/database.types";
 
 const orNull = (v?: string) => {
   const t = (v ?? "").trim();
@@ -33,8 +33,8 @@ export async function createClientAccount(input: unknown): Promise<ActionResult<
     return actionError("FORBIDDEN", "You can't manage clients.");
   const d = parsed.data;
   try {
-    const values: TablesInsert<"accounts"> = {
-      organization_id: ctx.organization.id,
+    const row = await accountRepo.insertAccount({
+      organizationId: ctx.organization.id,
       name: d.name,
       code: orNull(d.code),
       email: orNull(d.email),
@@ -42,9 +42,8 @@ export async function createClientAccount(input: unknown): Promise<ActionResult<
       website: orNull(d.website),
       address: orNull(d.address),
       notes: orNull(d.notes),
-      created_by: ctx.profile.id,
-    };
-    const row = await accountRepo.insertAccount(values);
+      createdBy: ctx.profile.id,
+    });
     revalidatePath("/clients");
     return actionOk({ id: row.id });
   } catch (e) {
@@ -68,7 +67,7 @@ export async function updateClientAccount(input: unknown): Promise<ActionResult>
       website: orNull(d.website),
       address: orNull(d.address),
       notes: orNull(d.notes),
-      updated_by: ctx.profile.id,
+      updatedBy: ctx.profile.id,
     });
     revalidatePath("/clients");
     return actionOk(undefined);
@@ -105,14 +104,14 @@ export async function inviteClientContact(input: unknown): Promise<ActionResult<
     if (!roleId) return actionError("INTERNAL", "The guest role isn't configured for this organization.");
     const token = crypto.randomUUID();
     await inviteRepo.insertInvitation({
-      organization_id: ctx.organization.id,
+      organizationId: ctx.organization.id,
       email: d.email,
-      role_id: roleId,
-      workspace_id: null,
-      member_type: "guest",
-      account_id: d.accountId,
+      roleId,
+      workspaceId: null,
+      memberType: "guest",
+      accountId: d.accountId,
       token,
-      invited_by: ctx.profile.id,
+      invitedBy: ctx.profile.id,
     });
     await logActivity({
       organizationId: ctx.organization.id,
@@ -129,16 +128,8 @@ export async function inviteClientContact(input: unknown): Promise<ActionResult<
   }
 }
 
-
 /**
- * Create a portal login for a client outright, instead of mailing an invite the
- * client has to redeem themselves.
- *
- * Self-service sign-up can't serve this case: Supabase requires email
- * confirmation, so the account stays unusable until someone opens that inbox,
- * and a fresh user with no membership is bounced to onboarding — where a client
- * would create their own empty organization. Both are sidestepped here by
- * confirming the address and writing the guest membership in one go.
+ * Create a portal login for a client outright.
  */
 export async function createPortalUser(
   input: unknown,
@@ -152,45 +143,48 @@ export async function createPortalUser(
     return actionError("FORBIDDEN", "You can't create portal users.");
 
   const d = parsed.data;
+  const email = d.email.toLowerCase().trim();
+
   try {
     const roleId = await accountRepo.getGuestRoleId();
     if (!roleId) return actionError("INTERNAL", "The guest role isn't configured for this organization.");
 
-    const admin = createAdminClient();
-    const created = await admin.auth.admin.createUser({
-      email: d.email,
-      password: d.password,
-      email_confirm: true, // no inbox round-trip; the admin is vouching for them
-      user_metadata: { full_name: d.fullName },
+    const existing = await prisma.profile.findFirst({
+      where: { email: { equals: email, mode: "insensitive" }, deletedAt: null },
     });
-    if (created.error || !created.data.user) {
-      const already = /already|exists|registered/i.test(created.error?.message ?? "");
+    if (existing) {
       return actionError(
-        already ? "VALIDATION" : "INTERNAL",
-        already
-          ? "An account with that email already exists — send them an invite link instead."
-          : (created.error?.message ?? "Couldn't create the account."),
+        "VALIDATION",
+        "An account with that email already exists — send them an invite link instead.",
       );
     }
 
-    const { error: memberError } = await admin.from("organization_members").upsert(
-      {
-        organization_id: ctx.organization.id,
-        user_id: created.data.user.id,
-        role_id: roleId,
-        member_type: "guest",
-        account_id: d.accountId,
-        status: "active",
-        joined_at: new Date().toISOString(),
-      },
-      { onConflict: "organization_id,user_id" },
-    );
-    // Leaving a confirmed login with no membership would strand them on
-    // onboarding, so undo the user rather than half-finish.
-    if (memberError) {
-      await admin.auth.admin.deleteUser(created.data.user.id);
-      throw memberError;
-    }
+    const passwordHash = await bcrypt.hash(d.password, 10);
+    const userId = crypto.randomUUID();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.profile.create({
+        data: {
+          id: userId,
+          email,
+          fullName: d.fullName,
+          passwordHash,
+          isActive: true,
+        },
+      });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: ctx.organization.id,
+          userId,
+          roleId,
+          memberType: "guest",
+          accountId: d.accountId,
+          status: "active",
+          joinedAt: new Date(),
+        },
+      });
+    });
 
     await logActivity({
       organizationId: ctx.organization.id,

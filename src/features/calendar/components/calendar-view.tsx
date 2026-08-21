@@ -30,7 +30,6 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { rescheduleTaskDue } from "@/features/tasks/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,22 +82,14 @@ export function CalendarView({
 
   useEffect(() => setEvents(initialEvents), [initialEvents]);
 
-  // Realtime: reconcile from the server when tasks change anywhere.
+  // Polling: reconcile from the server when tab is active
   useEffect(() => {
-    const supabase = createClient();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const bump = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => router.refresh(), 300);
-    };
-    const channel = supabase
-      .channel("calendar")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, bump)
-      .subscribe();
-    return () => {
-      if (timer) clearTimeout(timer);
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
   }, [router]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));

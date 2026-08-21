@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Building2, CheckSquare, Clock, Layers, Plus, Search, SunMoon, User } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { searchCommandMenu, type SearchResult } from "../actions";
 import { setActiveOrganization } from "@/features/organizations/actions";
 import { navFor } from "../nav-config";
 import type { ShellContext } from "../types";
@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/command";
 
 const RECENTS_KEY = "flowdesk:recent-searches";
-
-type SearchResult = {
-  projects: { id: string; name: string; key: string | null; color: string | null }[];
-  tasks: { id: string; title: string; project_id: string }[];
-  members: { user_id: string; profile: { full_name: string | null } | null }[];
-  workspaces: { id: string; name: string }[];
-};
 
 export function CommandMenu({ ctx }: { ctx: ShellContext }) {
   const router = useRouter();
@@ -62,22 +55,7 @@ export function CommandMenu({ ctx }: { ctx: ShellContext }) {
     queryKey: ["command-search", ctx.org.id, term],
     enabled: open && term.length >= 1,
     queryFn: async () => {
-      const supabase = createClient();
-      const like = `%${term}%`;
-      // RLS scopes every table to the caller, so results are permission-aware.
-      const [projects, tasks, members, workspaces] = await Promise.all([
-        supabase.from("projects").select("id, name, key, color").eq("organization_id", ctx.org.id).is("deleted_at", null).ilike("name", like).limit(6),
-        supabase.from("tasks").select("id, title, project_id").eq("organization_id", ctx.org.id).is("deleted_at", null).ilike("title", like).limit(6),
-        supabase.from("organization_members").select("user_id, profile:profiles!organization_members_user_id_fkey!inner(full_name)").eq("organization_id", ctx.org.id).eq("status", "active").ilike("profile.full_name", like).limit(6),
-        supabase.from("workspaces").select("id, name").eq("organization_id", ctx.org.id).is("deleted_at", null).ilike("name", like).limit(6),
-      ]);
-      for (const r of [projects, tasks, members, workspaces]) if (r.error) throw r.error;
-      return {
-        projects: projects.data ?? [],
-        tasks: tasks.data ?? [],
-        members: (members.data ?? []).map((m) => ({ user_id: m.user_id, profile: m.profile })),
-        workspaces: workspaces.data ?? [],
-      };
+      return await searchCommandMenu(term);
     },
   });
 

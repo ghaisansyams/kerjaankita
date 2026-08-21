@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { requireOrgContext } from "@/lib/auth";
 import { PERMISSIONS } from "@/constants";
 import { checkPermission } from "@/repositories/permission.repository";
-import { createAdminClient } from "@/lib/supabase/admin";
 import * as plan from "@/repositories/import-planning.repository";
 import { getParser } from "@/services/import/parsers";
 import { getAiProvider, aiImportEnabled, registeredProviders } from "@/services/ai";
@@ -88,6 +87,7 @@ export async function analyzeImportDocument(input: unknown): Promise<
   const parsed = analyzeImportSchema.safeParse(input);
   if (!parsed.success) return actionError("VALIDATION", "Invalid request.");
   const { bucket, path, fileName, fileType } = parsed.data;
+  void bucket;
   const orgId = ctx.organization.id;
 
   if (!(await checkPermission(orgId, PERMISSIONS.ATTACHMENT_UPLOAD, {}))) {
@@ -114,37 +114,31 @@ export async function analyzeImportDocument(input: unknown): Promise<
     );
   }
 
-  const admin = createAdminClient();
   try {
     const parser = getParser(fileName);
     if (!parser) {
       await plan.updateImportJob(jobId, { status: "failed", error: "Unsupported file type" });
       return actionError("VALIDATION", "Only .docx, .pdf, .xlsx or .csv files are supported.");
     }
-    const dl = await admin.storage.from(bucket).download(path);
-    if (dl.error || !dl.data) {
-      await plan.updateImportJob(jobId, { status: "failed", error: "File not found" });
-      return actionError("NOT_FOUND", "Uploaded file not found.");
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(path, "base64");
+    } catch {
+      buffer = Buffer.from("");
     }
-    const buffer = Buffer.from(await dl.data.arrayBuffer());
     const doc = await parser.parse(buffer, fileName);
 
-    // Stage extracted images in storage (kept until commit attaches them).
+    // Stage extracted images in memory/refs
     const images: ImportImageRef[] = [];
     for (const img of doc.images) {
       const imgPath = `${orgId}/_ai-import/img/${crypto.randomUUID()}.${img.ext}`;
-      const up = await admin.storage
-        .from(bucket)
-        .upload(imgPath, img.data, { contentType: img.contentType, upsert: false });
-      if (up.error) continue;
-      const signed = await admin.storage.from(bucket).createSignedUrl(imgPath, 3600);
       images.push({
         index: img.index,
         path: imgPath,
         fileName: `image-${img.index}.${img.ext}`,
         fileType: img.contentType,
         fileSize: img.data.length,
-        previewUrl: signed.data?.signedUrl ?? "",
+        previewUrl: `data:${img.contentType};base64,${img.data.toString("base64")}`,
       });
     }
 
@@ -167,7 +161,6 @@ export async function analyzeImportDocument(input: unknown): Promise<
     }
     const analysis = val.data;
 
-    await admin.storage.from(bucket).remove([path]); // temp source no longer needed
     // Keep the compacted text so pass 2 can expand each area without re-parsing.
     const documentText = doc.text ? compactText(doc.text).slice(0, 120_000) : "";
     await plan.updateImportJob(jobId, {
@@ -372,7 +365,7 @@ export async function commitAiImport(
 
           // Checklist — flatten one level of nesting: each parent (depth 0) is
           // followed by its children (depth 1), positions kept sequential.
-          const checklistRows: Record<string, unknown>[] = [];
+          const checklistRows: plan.InsertChecklistItemRowInput[] = [];
           let cPos = 0;
           for (const item of feat.checklist) {
             checklistRows.push({

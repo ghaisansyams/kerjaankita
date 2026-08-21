@@ -11,7 +11,6 @@ import { getTaskRef } from "@/repositories/task.repository";
 import { mapUnknownError } from "@/lib/errors";
 import { toFieldErrors } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/types/action";
-import type { TablesInsert } from "@/types/database.types";
 
 // The task drawer reconciles via router.refresh() after each mutation.
 
@@ -25,21 +24,19 @@ export async function addComment(
   }
   const { taskId, body } = parsed.data;
   try {
-    const ref = await getTaskRef(taskId); // RLS-scoped: null → can't see the task
+    const ref = await getTaskRef(taskId);
     if (!ref) return actionError("NOT_FOUND", "Task not found.");
     const id = crypto.randomUUID();
-    const values: TablesInsert<"comments"> = {
+    await commentRepo.insertComment({
       id,
-      organization_id: ref.organization_id,
-      project_id: ref.project_id,
+      organizationId: ref.organization_id,
+      projectId: ref.project_id,
       entity: "task",
-      entity_id: taskId,
-      author_id: ctx.profile.id,
+      entityId: taskId,
+      authorId: ctx.profile.id,
       body,
-      is_internal: true,
-    };
-    // comment.created activity + @mention notifications fire from triggers.
-    await commentRepo.insertComment(values);
+      isInternal: true,
+    });
     return actionOk({ id });
   } catch (e) {
     return mapUnknownError(e);

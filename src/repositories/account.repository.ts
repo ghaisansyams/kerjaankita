@@ -1,18 +1,22 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
-import type { TablesInsert, TablesUpdate } from "@/types/database.types";
+import { prisma } from "@/lib/prisma";
 
 /** Read-only account options for the project picker. Full Accounts CRUD is a later sprint. */
 export async function listAccountOptions(orgId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("id, name")
-    .eq("organization_id", orgId)
-    .eq("is_active", true)
-    .is("deleted_at", null)
-    .order("name");
-  if (error) throw error;
+  const data = await prisma.account.findMany({
+    where: {
+      organizationId: orgId,
+      isActive: true,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
   return data;
 }
 
@@ -34,43 +38,65 @@ export type ClientAccountRow = {
 
 /** Client accounts for the org, each with its linked projects and portal-contact count. */
 export async function listClientAccounts(orgId: string): Promise<ClientAccountRow[]> {
-  const supabase = await createClient();
-  const [accountsRes, projectsRes, guestsRes] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select("id, name, code, email, phone, website, address, notes, is_active")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("name"),
-    supabase
-      .from("projects")
-      .select("id, name, account_id")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .not("account_id", "is", null),
-    supabase
-      .from("organization_members")
-      .select("account_id")
-      .eq("organization_id", orgId)
-      .eq("member_type", "guest")
-      .not("account_id", "is", null),
+  const [accounts, projects, guests] = await Promise.all([
+    prisma.account.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        email: true,
+        phone: true,
+        website: true,
+        address: true,
+        notes: true,
+        isActive: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    }),
+    prisma.project.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        accountId: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        accountId: true,
+      },
+    }),
+    prisma.organizationMember.findMany({
+      where: {
+        organizationId: orgId,
+        memberType: "guest",
+        accountId: { not: null },
+      },
+      select: {
+        accountId: true,
+      },
+    }),
   ]);
-  if (accountsRes.error) throw accountsRes.error;
 
   const projectsByAccount = new Map<string, { id: string; name: string }[]>();
-  for (const p of projectsRes.data ?? []) {
-    if (!p.account_id) continue;
-    const list = projectsByAccount.get(p.account_id) ?? [];
+  for (const p of projects) {
+    if (!p.accountId) continue;
+    const list = projectsByAccount.get(p.accountId) ?? [];
     list.push({ id: p.id, name: p.name });
-    projectsByAccount.set(p.account_id, list);
+    projectsByAccount.set(p.accountId, list);
   }
   const contactsByAccount = new Map<string, number>();
-  for (const g of guestsRes.data ?? []) {
-    if (!g.account_id) continue;
-    contactsByAccount.set(g.account_id, (contactsByAccount.get(g.account_id) ?? 0) + 1);
+  for (const g of guests) {
+    if (!g.accountId) continue;
+    contactsByAccount.set(g.accountId, (contactsByAccount.get(g.accountId) ?? 0) + 1);
   }
 
-  return (accountsRes.data ?? []).map((a) => ({
+  return accounts.map((a) => ({
     id: a.id,
     name: a.name,
     code: a.code,
@@ -79,7 +105,7 @@ export async function listClientAccounts(orgId: string): Promise<ClientAccountRo
     website: a.website,
     address: a.address,
     notes: a.notes,
-    isActive: a.is_active,
+    isActive: a.isActive,
     projects: projectsByAccount.get(a.id) ?? [],
     contactCount: contactsByAccount.get(a.id) ?? 0,
   }));
@@ -87,35 +113,88 @@ export async function listClientAccounts(orgId: string): Promise<ClientAccountRo
 
 /** The system "guest" role — used when inviting a client contact to the portal. */
 export async function getGuestRoleId() {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("roles")
-    .select("id")
-    .eq("key", "org_guest")
-    .is("organization_id", null)
-    .maybeSingle();
-  return data?.id ?? null;
+  const role = await prisma.role.findFirst({
+    where: {
+      key: "org_guest",
+      organizationId: null,
+    },
+    select: {
+      id: true,
+    },
+  });
+  return role?.id ?? null;
 }
 
-export async function insertAccount(values: TablesInsert<"accounts">) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("accounts").insert(values).select("id").single();
-  if (error) throw error;
+export async function insertAccount(values: {
+  id?: string;
+  organization_id?: string;
+  organizationId?: string;
+  name: string;
+  code?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+  isActive?: boolean;
+  created_by?: string | null;
+  createdBy?: string | null;
+}) {
+  const data = await prisma.account.create({
+    data: {
+      id: values.id,
+      organizationId: values.organizationId || values.organization_id!,
+      name: values.name,
+      code: values.code,
+      email: values.email,
+      phone: values.phone,
+      website: values.website,
+      address: values.address,
+      notes: values.notes,
+      isActive: values.isActive ?? values.is_active ?? true,
+      createdBy: values.createdBy || values.created_by,
+    },
+    select: { id: true },
+  });
   return data;
 }
 
-export async function updateAccountRow(id: string, patch: TablesUpdate<"accounts">) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("accounts").update(patch).eq("id", id).is("deleted_at", null);
-  if (error) throw error;
+export async function updateAccountRow(
+  id: string,
+  patch: {
+    name?: string;
+    code?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    website?: string | null;
+    address?: string | null;
+    notes?: string | null;
+    is_active?: boolean;
+    isActive?: boolean;
+    updated_by?: string | null;
+    updatedBy?: string | null;
+  },
+) {
+  await prisma.account.update({
+    where: { id },
+    data: {
+      name: patch.name,
+      code: patch.code,
+      email: patch.email,
+      phone: patch.phone,
+      website: patch.website,
+      address: patch.address,
+      notes: patch.notes,
+      isActive: patch.isActive ?? patch.is_active,
+      updatedBy: patch.updatedBy || patch.updated_by,
+    },
+  });
 }
 
 export async function softDeleteAccount(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("accounts")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .is("deleted_at", null);
-  if (error) throw error;
+  await prisma.account.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
 }

@@ -4,11 +4,15 @@ import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { formatRelative } from "@/utils/format";
 import { cn } from "@/lib/utils";
-import type { Tables } from "@/types/database.types";
+import type { NotificationRow } from "@/repositories/notification.repository";
 import { notificationHref, notificationMeta } from "@/features/notifications/constants";
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "@/features/notifications/actions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,23 +22,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
-type Notification = Tables<"notifications">;
-
 export function NotificationsMenu({ initialUnread }: { initialUnread: number }) {
   const qc = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(15);
-      return (data ?? []) as Notification[];
+      return (await fetchNotifications(15)) as NotificationRow[];
     },
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
 
   const notifications = data ?? [];
@@ -42,40 +38,16 @@ export function NotificationsMenu({ initialUnread }: { initialUnread: number }) 
     ? notifications.filter((n) => !n.is_read).length
     : initialUnread;
 
-  // Realtime: refresh the bell as notifications arrive (RLS delivers only ours).
-  React.useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("notifications-bell")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        () => qc.invalidateQueries({ queryKey: ["notifications"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [qc]);
-
   const markOne = useMutation({
     mutationFn: async (id: string) => {
-      const supabase = createClient();
-      await supabase
-        .from("notifications")
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq("id", id);
+      await markNotificationRead({ id });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
   const markAll = useMutation({
     mutationFn: async () => {
-      const supabase = createClient();
-      await supabase
-        .from("notifications")
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq("is_read", false);
+      await markAllNotificationsRead();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
@@ -86,84 +58,112 @@ export function NotificationsMenu({ initialUnread }: { initialUnread: number }) 
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
-          aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
+          className="relative h-9 w-9 text-muted-foreground hover:text-foreground"
+          aria-label="Notifications"
         >
-          <Bell className="size-4" />
+          <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-2 rounded-full bg-primary ring-2 ring-background" />
+            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+              {unread > 99 ? "99+" : unread}
+            </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <p className="text-sm font-medium">Notifications</p>
+      <DropdownMenuContent align="end" className="w-80 p-0 sm:w-96">
+        <div className="flex items-center justify-between p-4 pb-2">
+          <h4 className="text-sm font-semibold">Notifications</h4>
           {unread > 0 && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => markAll.mutate()}
               disabled={markAll.isPending}
-              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              <CheckCheck className="size-3.5" />
-              Mark all read
-            </button>
+              <CheckCheck className="mr-1 h-3.5 w-3.5" />
+              Mark all as read
+            </Button>
           )}
         </div>
         <Separator />
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="max-h-[380px]">
           {notifications.length === 0 ? (
-            <p className="px-3 py-10 text-center text-sm text-muted-foreground">
-              You&apos;re all caught up.
-            </p>
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              No notifications yet.
+            </div>
           ) : (
-            <ul className="divide-y">
+            <div className="divide-y">
               {notifications.map((n) => {
                 const meta = notificationMeta(n.type);
-                const href = notificationHref(n.entity, n.entity_id);
                 const Icon = meta.icon;
-                const body = (
-                  <div className={cn("flex items-start gap-2 px-3 py-2.5", !n.is_read && "bg-primary/5")}>
-                    <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full", meta.tone)}>
-                      <Icon className="size-3.5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-snug">{n.title}</p>
-                      {n.body && <p className="truncate text-xs text-muted-foreground">{n.body}</p>}
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {formatRelative(n.created_at)}
-                      </p>
+                const href = notificationHref(n.entity, n.entity_id);
+
+                const itemContent = (
+                  <div
+                    className={cn(
+                      "flex gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer",
+                      !n.is_read && "bg-muted/20",
+                    )}
+                    onClick={() => {
+                      if (!n.is_read) markOne.mutate(n.id);
+                    }}
+                  >
+                    <div
+                      className={cn(
+                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                        meta.tone,
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
                     </div>
-                    {!n.is_read && <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />}
+                    <div className="flex-1 space-y-1 overflow-hidden">
+                      <div className="flex items-start justify-between gap-2">
+                        <p
+                          className={cn(
+                            "text-xs leading-none",
+                            !n.is_read ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
+                          )}
+                        >
+                          {n.title}
+                        </p>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {formatRelative(n.created_at)}
+                        </span>
+                      </div>
+                      {n.body && (
+                        <p className="line-clamp-2 text-xs text-muted-foreground">
+                          {n.body}
+                        </p>
+                      )}
+                    </div>
+                    {!n.is_read && (
+                      <div className="flex shrink-0 items-center">
+                        <span className="h-2 w-2 rounded-full bg-primary" />
+                      </div>
+                    )}
                   </div>
                 );
-                return (
-                  <li key={n.id}>
-                    {href ? (
-                      <Link href={href} onClick={() => markOne.mutate(n.id)} className="block hover:bg-muted/50">
-                        {body}
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => markOne.mutate(n.id)}
-                        className="block w-full text-left hover:bg-muted/50"
-                      >
-                        {body}
-                      </button>
-                    )}
-                  </li>
+
+                return href ? (
+                  <Link key={n.id} href={href} className="block">
+                    {itemContent}
+                  </Link>
+                ) : (
+                  <div key={n.id}>{itemContent}</div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </ScrollArea>
         <Separator />
-        <Link
-          href="/notifications"
-          className="block px-3 py-2 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          View all notifications
-        </Link>
+        <div className="p-2 text-center">
+          <Link
+            href="/notifications"
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            View all notifications
+          </Link>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

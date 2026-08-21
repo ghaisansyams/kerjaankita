@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FileUp, ImageOff, Loader2, Sparkles, Trash2, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { FileDropzone } from "@/components/file-dropzone";
 import {
   commitImportedTasks,
@@ -83,15 +82,6 @@ export function ImportTasksDialog({
       if (!req?.ok) {
         setPhase("upload");
         toast.error(req?.error.message ?? "Gagal menyiapkan upload.");
-        return;
-      }
-      const supabase = createClient();
-      const up = await supabase.storage
-        .from(req.data.bucket)
-        .upload(req.data.path, file, { contentType: file.type || undefined, upsert: false });
-      if (up.error) {
-        setPhase("upload");
-        toast.error("Gagal mengunggah file.");
         return;
       }
       const res = await parseImportDocument({ projectId, path: req.data.path, fileName: file.name });

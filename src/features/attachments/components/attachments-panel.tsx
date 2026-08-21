@@ -4,7 +4,6 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Eye, EyeOff, FileText, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/utils/format";
 import {
@@ -76,14 +75,6 @@ export function AttachmentsPanel({
           toast.error(req?.error.message ?? `Couldn't upload ${file.name}`);
           continue;
         }
-        const supabase = createClient();
-        const { error } = await supabase.storage
-          .from(req.data.bucket)
-          .upload(req.data.path, file, { contentType: file.type || undefined, upsert: false });
-        if (error) {
-          toast.error(`Couldn't upload ${file.name}`);
-          continue;
-        }
         const reg = await registerAttachment({
           projectId,
           taskId,
@@ -93,10 +84,6 @@ export function AttachmentsPanel({
           fileSize: file.size,
         });
         if (!reg?.ok) {
-          // Registration failed after the object landed in Storage — delete it
-          // so we never leave an orphaned object behind (QA RC1 · M3). The
-          // uploader owns the object, so this is allowed by the bucket policy.
-          await supabase.storage.from(req.data.bucket).remove([req.data.path]);
           toast.error(reg?.error.message ?? "Couldn't save file");
         }
       }

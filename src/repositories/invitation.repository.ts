@@ -1,61 +1,147 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import type { TablesInsert } from "@/types/database.types";
+import { prisma } from "@/lib/prisma";
+import type { InvitationStatus, MemberType } from "@prisma/client";
 
-/** Invitations for an org (RLS-scoped: only managers can read them). */
+/** Invitations for an org. */
 export async function listInvitations(orgId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("invitations")
-    .select(
-      `id, email, member_type, status, expires_at, token, created_at,
-       role:roles(name), workspace:workspaces(name), account:accounts(name)`,
-    )
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  const data = await prisma.invitation.findMany({
+    where: {
+      organizationId: orgId,
+    },
+    select: {
+      id: true,
+      email: true,
+      memberType: true,
+      status: true,
+      expiresAt: true,
+      token: true,
+      createdAt: true,
+      role: {
+        select: {
+          name: true,
+        },
+      },
+      account: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return data.map((d) => ({
+    id: d.id,
+    email: d.email,
+    member_type: d.memberType,
+    status: d.status,
+    expires_at: d.expiresAt.toISOString(),
+    token: d.token,
+    created_at: d.createdAt.toISOString(),
+    role: d.role ? { name: d.role.name } : null,
+    account: d.account ? { name: d.account.name } : null,
+  }));
 }
 
 export type InvitationRow = Awaited<ReturnType<typeof listInvitations>>[number];
 
-export async function insertInvitation(values: TablesInsert<"invitations">) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("invitations").insert(values);
-  if (error) throw error;
+export async function insertInvitation(values: {
+  id?: string;
+  organization_id?: string;
+  organizationId?: string;
+  email: string;
+  role_id?: string;
+  roleId?: string;
+  workspace_id?: string | null;
+  workspaceId?: string | null;
+  member_type?: MemberType | "member" | "guest";
+  memberType?: MemberType | "member" | "guest";
+  token: string;
+  status?: InvitationStatus | "pending";
+  expires_at?: string | Date;
+  expiresAt?: string | Date;
+  invited_by?: string | null;
+  invitedBy?: string | null;
+  account_id?: string | null;
+  accountId?: string | null;
+}) {
+  await prisma.invitation.create({
+    data: {
+      id: values.id,
+      organizationId: values.organizationId || values.organization_id!,
+      email: values.email,
+      roleId: values.roleId || values.role_id!,
+      workspaceId: values.workspaceId !== undefined ? values.workspaceId : values.workspace_id,
+      memberType: (values.memberType || values.member_type || "member") as MemberType,
+      token: values.token,
+      status: (values.status || "pending") as InvitationStatus,
+      expiresAt: values.expiresAt ? new Date(values.expiresAt) : values.expires_at ? new Date(values.expires_at) : undefined,
+      invitedBy: values.invitedBy || values.invited_by,
+      accountId: values.accountId !== undefined ? values.accountId : values.account_id,
+    },
+  });
 }
 
 export async function revokeInvitationRow(id: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("invitations")
-    .update({ status: "revoked" })
-    .eq("id", id)
-    .eq("status", "pending")
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const data = await prisma.invitation.updateMany({
+    where: {
+      id,
+      status: "pending",
+    },
+    data: {
+      status: "revoked",
+    },
+  });
+  if (data.count === 0) return null;
+  return { id };
 }
 
 /* ------------------------------------------------------------------------- */
-/*  Acceptance path — the invitee is not yet a member, so RLS can't see the    */
-/*  invitation. These use the service-role client and validate explicitly.     */
+/*  Acceptance path                                                          */
 /* ------------------------------------------------------------------------- */
 
 export async function getInvitationByToken(token: string) {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("invitations")
-    .select(
-      `id, organization_id, email, role_id, workspace_id, member_type, account_id, status, expires_at,
-       organization:organizations(name), role:roles(name)`,
-    )
-    .eq("token", token)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const data = await prisma.invitation.findUnique({
+    where: { token },
+    select: {
+      id: true,
+      organizationId: true,
+      email: true,
+      roleId: true,
+      workspaceId: true,
+      memberType: true,
+      accountId: true,
+      status: true,
+      expiresAt: true,
+      organization: {
+        select: {
+          name: true,
+        },
+      },
+      role: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    organization_id: data.organizationId,
+    email: data.email,
+    role_id: data.roleId,
+    workspace_id: data.workspaceId,
+    member_type: data.memberType,
+    account_id: data.accountId,
+    status: data.status,
+    expires_at: data.expiresAt.toISOString(),
+    organization: data.organization ? { name: data.organization.name } : null,
+    role: data.role ? { name: data.role.name } : null,
+  };
 }
 
 /** Create the membership (idempotent) and mark the invite accepted. */
@@ -67,24 +153,38 @@ export async function acceptInvitationTx(params: {
   memberType: "member" | "guest";
   accountId: string | null;
 }) {
-  const admin = createAdminClient();
-  const { error: memberError } = await admin.from("organization_members").upsert(
-    {
-      organization_id: params.organizationId,
-      user_id: params.userId,
-      role_id: params.roleId,
-      member_type: params.memberType,
-      account_id: params.accountId,
-      status: "active",
-      joined_at: new Date().toISOString(),
-    },
-    { onConflict: "organization_id,user_id" },
-  );
-  if (memberError) throw memberError;
+  await prisma.$transaction(async (tx) => {
+    await tx.organizationMember.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: params.organizationId,
+          userId: params.userId,
+        },
+      },
+      update: {
+        roleId: params.roleId,
+        memberType: params.memberType as MemberType,
+        accountId: params.accountId,
+        status: "active",
+      },
+      create: {
+        organizationId: params.organizationId,
+        userId: params.userId,
+        roleId: params.roleId,
+        memberType: params.memberType as MemberType,
+        accountId: params.accountId,
+        status: "active",
+        joinedAt: new Date(),
+      },
+    });
 
-  const { error: inviteError } = await admin
-    .from("invitations")
-    .update({ status: "accepted", accepted_by: params.userId, accepted_at: new Date().toISOString() })
-    .eq("id", params.invitationId);
-  if (inviteError) throw inviteError;
+    await tx.invitation.update({
+      where: { id: params.invitationId },
+      data: {
+        status: "accepted",
+        acceptedBy: params.userId,
+        acceptedAt: new Date(),
+      },
+    });
+  });
 }

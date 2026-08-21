@@ -4,10 +4,9 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { CheckCheck } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/utils/format";
-import { markAllNotificationsRead, markNotificationRead } from "../actions";
+import { markAllNotificationsRead, markNotificationRead, fetchNotifications } from "../actions";
 import { notificationHref, notificationMeta } from "../constants";
 import { Button } from "@/components/ui/button";
 
@@ -23,37 +22,31 @@ export type NotificationVM = {
 };
 
 export function NotificationCenter({
-  userId,
   initialItems,
 }: {
-  userId: string;
+  userId?: string;
   initialItems: NotificationVM[];
 }) {
-  const [items, setItems] = useState(initialItems);
+  const [items, setItems] = useState<NotificationVM[]>(initialItems);
   const [tab, setTab] = useState<"all" | "unread">("all");
   const [, startTransition] = useTransition();
 
   useEffect(() => setItems(initialItems), [initialItems]);
 
-  // Realtime: new notifications for this user arrive live.
+  // Polling for live notification updates
   useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const n = payload.new as NotificationVM;
-          setItems((prev) => (prev.some((p) => p.id === n.id) ? prev : [n, ...prev]));
-          toast(n.title, { description: n.body ?? undefined });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId]);
+    const interval = setInterval(async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const fresh = (await fetchNotifications(50)) as NotificationVM[];
+          setItems(fresh);
+        } catch {
+          // ignore transient poll error
+        }
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const unread = items.filter((n) => !n.is_read).length;
   const shown = tab === "unread" ? items.filter((n) => !n.is_read) : items;
@@ -85,63 +78,74 @@ export function NotificationCenter({
               onClick={() => setTab(t)}
               className={cn(
                 "rounded px-3 py-1 text-xs font-medium capitalize transition-colors",
-                tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                tab === t ? "bg-muted font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {t}
-              {t === "unread" && unread > 0 ? ` (${unread})` : ""}
+              {t} {t === "unread" && unread > 0 ? `(${unread})` : ""}
             </button>
           ))}
         </div>
-        <Button variant="ghost" size="sm" onClick={readAll} disabled={unread === 0}>
-          <CheckCheck className="size-4" />
-          Mark all read
-        </Button>
+        {unread > 0 && (
+          <Button size="sm" variant="ghost" onClick={readAll}>
+            <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
+            Mark all as read
+          </Button>
+        )}
       </div>
 
       {shown.length === 0 ? (
-        <p className="px-3 py-16 text-center text-sm text-muted-foreground">
-          {tab === "unread" ? "No unread notifications." : "You're all caught up."}
-        </p>
+        <div className="p-12 text-center text-sm text-muted-foreground">
+          {tab === "unread" ? "No unread notifications." : "No notifications yet."}
+        </div>
       ) : (
         <ul className="divide-y">
           {shown.map((n) => {
             const meta = notificationMeta(n.type);
-            const href = notificationHref(n.entity, n.entity_id);
             const Icon = meta.icon;
-            const inner = (
-              <div className={cn("flex items-start gap-3 px-3 py-3", !n.is_read && "bg-primary/5")}>
-                <span className={cn("mt-0.5 grid size-8 shrink-0 place-items-center rounded-full", meta.tone)}>
-                  <Icon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium leading-snug">{n.title}</p>
-                  {n.body && <p className="truncate text-sm text-muted-foreground">{n.body}</p>}
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{formatRelative(n.created_at)}</p>
+            const href = notificationHref(n.entity, n.entity_id);
+
+            const row = (
+              <li
+                key={n.id}
+                className={cn(
+                  "flex items-start gap-3 p-4 transition-colors hover:bg-muted/50",
+                  !n.is_read && "bg-muted/30",
+                )}
+              >
+                <div className={cn("mt-0.5 rounded-md p-1.5", meta.tone)}>
+                  <Icon className="h-4 w-4" />
                 </div>
-                {!n.is_read && <span aria-label="Unread" className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />}
-              </div>
-            );
-            return (
-              <li key={n.id}>
-                {href ? (
-                  <Link
-                    href={href}
-                    onClick={() => read(n.id)}
-                    className="block outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/50"
-                  >
-                    {inner}
-                  </Link>
-                ) : (
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{n.title}</p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatRelative(n.created_at)}
+                    </span>
+                  </div>
+                  {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
+                </div>
+                {!n.is_read && (
                   <button
-                    type="button"
-                    onClick={() => read(n.id)}
-                    className="block w-full text-left outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/50"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      read(n.id);
+                    }}
+                    className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                    title="Mark read"
                   >
-                    {inner}
+                    ●
                   </button>
                 )}
               </li>
+            );
+
+            return href ? (
+              <Link key={n.id} href={href} onClick={() => read(n.id)}>
+                {row}
+              </Link>
+            ) : (
+              row
             );
           })}
         </ul>
