@@ -215,35 +215,31 @@ export function MeetingDetail({
         </CardHeader>
         <CardContent className="space-y-3">
           {!hasTranscript ? (
-            !sttEnabled ? (
-              <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-                <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
-                  <KeyRound className="size-4" /> Speech-to-Text Groq AI belum aktif
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Belum ada transkrip. Klik tombol di bawah untuk mengubah rekaman suara menjadi teks dengan Groq Whisper AI.
+              </p>
+              <Button onClick={runTranscribe} disabled={busy} className="gap-2">
+                {busy ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Sedang Mentranskrip dengan Groq AI…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4 text-amber-400" /> Transkrip dengan Groq AI
+                  </>
+                )}
+              </Button>
+              {!sttEnabled && (
+                <div className="mt-2 max-w-md text-left rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400 mb-1">
+                    <KeyRound className="size-3.5" /> Info Konfigurasi Groq AI
+                  </div>
+                  Pastikan <code>GROQ_API_KEY</code> sudah terpasang di <code>.env.local</code> server agar Speech-to-Text berjalan lancar.
                 </div>
-                <p className="text-muted-foreground">
-                  Tambahkan <code>GROQ_API_KEY</code> di <code>.env.local</code> server untuk
-                  mengaktifkan transkrip suara-ke-teks otomatis dengan AI Groq Whisper (super cepat & akurat).
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 py-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Belum ada transkrip. Klik tombol di bawah untuk mengubah rekaman suara menjadi teks dengan Groq Whisper AI.
-                </p>
-                <Button onClick={runTranscribe} disabled={busy} className="gap-2">
-                  {busy ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" /> Sedang Mentranskrip dengan Groq AI…
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="size-4 text-amber-400" /> Transkrip dengan Groq AI
-                    </>
-                  )}
-                </Button>
-                {meeting.error && <p className="text-xs text-rose-600 dark:text-rose-400">{meeting.error}</p>}
-              </div>
-            )
+              )}
+              {meeting.error && <p className="text-xs text-rose-600 dark:text-rose-400">{meeting.error}</p>}
+            </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">

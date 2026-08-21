@@ -1,4 +1,8 @@
 import "server-only";
+import dotenv from "dotenv";
+
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 /**
  * Speech-to-Text via Groq Whisper API (or OpenAI-compatible /audio/transcriptions endpoint).
@@ -23,29 +27,35 @@ export type TranscriptionResult = {
 };
 
 function apiKey(): string {
-  const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
-  if (groqKey) return groqKey;
-  return (process.env.OPENAI_COMPATIBLE_API_KEY ?? "").trim();
+  const groqKey = (
+    process.env.GROQ_API_KEY ||
+    process.env.GROQ_APIKEY ||
+    process.env.GROQ_KEY ||
+    process.env.OPENAI_COMPATIBLE_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    ""
+  ).trim();
+  return groqKey;
 }
 
 function baseUrl(): string {
-  const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
-  if (groqKey) {
-    return (process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
+  const customUrl = (process.env.GROQ_BASE_URL || process.env.OPENAI_COMPATIBLE_BASE_URL || "").trim();
+  if (customUrl) {
+    return customUrl.replace(/\/+$/, "");
   }
-  return (process.env.GROQ_BASE_URL || process.env.OPENAI_COMPATIBLE_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
+  return "https://api.groq.com/openai/v1";
 }
 
 function model(): string {
-  const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
-  if (groqKey) {
-    return process.env.GROQ_TRANSCRIBE_MODEL || "whisper-large-v3-turbo";
-  }
-  return process.env.GROQ_TRANSCRIBE_MODEL || process.env.OPENAI_COMPATIBLE_TRANSCRIBE_MODEL || "whisper-large-v3-turbo";
+  return (
+    process.env.GROQ_TRANSCRIBE_MODEL ||
+    process.env.OPENAI_COMPATIBLE_TRANSCRIBE_MODEL ||
+    "whisper-large-v3-turbo"
+  );
 }
 
 function providerName(): string {
-  if (process.env.GROQ_API_KEY) return "groq";
+  if (process.env.GROQ_API_KEY || process.env.GROQ_APIKEY) return "groq";
   return "openai-compatible";
 }
 
@@ -63,7 +73,7 @@ export async function transcribeAudio(input: {
   const key = apiKey();
   if (!key) {
     throw new Error(
-      "Transcription is not configured. Please set GROQ_API_KEY in your environment variables.",
+      "Speech-to-Text belum aktif. Pastikan variabel GROQ_API_KEY sudah diisi di .env.local server.",
     );
   }
 
@@ -72,7 +82,7 @@ export async function transcribeAudio(input: {
   const blob = new Blob([new Uint8Array(input.data)], {
     type: input.mimeType || "application/octet-stream",
   });
-  form.append("file", blob, input.fileName);
+  form.append("file", blob, input.fileName || "audio.mp3");
   form.append("model", selectedModel);
   form.append("response_format", "verbose_json");
   form.append("temperature", "0");
