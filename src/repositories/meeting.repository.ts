@@ -314,8 +314,9 @@ export async function adminSignedAudioUrl(bucket?: string, audioPath?: string, t
   void ttl;
   if (!audioPath) return null;
   if (audioPath.startsWith("http://") || audioPath.startsWith("https://")) return audioPath;
-  if (audioPath.startsWith("/")) return audioPath;
-  return `/${audioPath}`;
+  if (audioPath.startsWith("/uploads/")) return audioPath;
+  if (audioPath.startsWith("uploads/")) return `/${audioPath}`;
+  return `/uploads/meetings/${audioPath.replace(/^\/+/, "")}`;
 }
 
 export async function adminDownloadAudio(bucket?: string, audioPath?: string): Promise<Buffer> {
@@ -333,11 +334,20 @@ export async function adminDownloadAudio(bucket?: string, audioPath?: string): P
   const pathModule = await import("path");
   const cleanPath = audioPath.replace(/^\/+/, "");
 
-  const publicPath = pathModule.join(process.cwd(), "public", cleanPath);
-  try {
-    return await fs.readFile(publicPath);
-  } catch {
-    const rootPath = pathModule.join(process.cwd(), cleanPath);
-    return await fs.readFile(rootPath);
+  const possiblePaths = [
+    pathModule.join(process.cwd(), "public", cleanPath),
+    pathModule.join(process.cwd(), "public", "uploads", "meetings", cleanPath),
+    pathModule.join(process.cwd(), "uploads", "meetings", cleanPath),
+    pathModule.join(process.cwd(), cleanPath),
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      return await fs.readFile(p);
+    } catch {
+      // continue to next path
+    }
   }
+
+  throw new Error(`File audio tidak ditemukan di server: ${audioPath}`);
 }
