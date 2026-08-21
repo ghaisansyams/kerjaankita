@@ -50,7 +50,7 @@ function revalidateBoard(projectId: string) {
 
 export async function createBoardColumn(input: unknown): Promise<ActionResult> {
   const ctx = await requireOrgContext();
-  let raw = typeof input === "object" && input !== null ? { ...input as Record<string, unknown> } : {};
+  const raw = typeof input === "object" && input !== null ? { ...(input as Record<string, unknown>) } : {};
   if ((!raw.workflowId || typeof raw.workflowId !== "string" || !raw.workflowId.trim()) && typeof raw.projectId === "string") {
     const wfId = await getProjectWorkflowId(raw.projectId, ctx.organization.id);
     if (wfId) raw.workflowId = wfId;

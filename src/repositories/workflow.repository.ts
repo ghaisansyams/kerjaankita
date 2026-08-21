@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import type { StatusCategory } from "@prisma/client";
 
 /** Statuses for a specific workflow (drives the status select and the board). */
 export async function getWorkflowStatuses(workflowId: string) {
@@ -119,7 +120,16 @@ export async function getDefaultTaskWorkflowId(orgId: string) {
         },
       });
 
-      const defaultStatuses = [
+      const defaultStatuses: {
+        key: string;
+        name: string;
+        category: StatusCategory;
+        color: string;
+        position: number;
+        isInitial: boolean;
+        isFinal: boolean;
+        autoProgress: number;
+      }[] = [
         { key: "backlog", name: "Backlog", category: "backlog", color: "#94A3B8", position: 0, isInitial: true, isFinal: false, autoProgress: 0 },
         { key: "todo", name: "To Do", category: "todo", color: "#64748B", position: 1, isInitial: false, isFinal: false, autoProgress: 0 },
         { key: "in_progress", name: "In Progress", category: "in_progress", color: "#3B82F6", position: 2, isInitial: false, isFinal: false, autoProgress: 50 },
@@ -134,7 +144,7 @@ export async function getDefaultTaskWorkflowId(orgId: string) {
             workflowId: newWf.id,
             key: `${st.key}_${Date.now().toString(36)}`,
             name: st.name,
-            category: st.category as any,
+            category: st.category,
             color: st.color,
             position: st.position,
             isInitial: st.isInitial,

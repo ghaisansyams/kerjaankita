@@ -217,27 +217,27 @@ export function MeetingDetail({
           {!hasTranscript ? (
             !sttEnabled ? (
               <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-                <div className="flex items-center gap-2 font-medium">
-                  <KeyRound className="size-4 text-amber-500" /> Speech-to-Text belum aktif
+                <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+                  <KeyRound className="size-4" /> Speech-to-Text Groq AI belum aktif
                 </div>
                 <p className="text-muted-foreground">
-                  Pipeline sudah siap; tambahkan <code>OPENAI_COMPATIBLE_API_KEY</code> di Vercel untuk
-                  mengaktifkan transkrip otomatis, lalu redeploy.
+                  Tambahkan <code>GROQ_API_KEY</code> di <code>.env.local</code> server untuk
+                  mengaktifkan transkrip suara-ke-teks otomatis dengan AI Groq Whisper (super cepat & akurat).
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Belum ada transkrip. Jalankan Speech-to-Text pada rekaman ini.
+                  Belum ada transkrip. Klik tombol di bawah untuk mengubah rekaman suara menjadi teks dengan Groq Whisper AI.
                 </p>
-                <Button onClick={runTranscribe} disabled={busy}>
+                <Button onClick={runTranscribe} disabled={busy} className="gap-2">
                   {busy ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" /> Mentranskrip… (bisa beberapa menit)
+                      <Loader2 className="size-4 animate-spin" /> Sedang Mentranskrip dengan Groq AI…
                     </>
                   ) : (
                     <>
-                      <Sparkles className="size-4" /> Transcribe
+                      <Sparkles className="size-4 text-amber-400" /> Transkrip dengan Groq AI
                     </>
                   )}
                 </Button>
@@ -267,9 +267,9 @@ export function MeetingDetail({
                   <Download className="size-4" /> TXT
                 </Button>
                 {sttEnabled && (
-                  <Button variant="ghost" size="sm" onClick={runTranscribe} disabled={busy}>
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    Re-transcribe
+                  <Button variant="outline" size="sm" onClick={runTranscribe} disabled={busy} className="gap-1.5 text-xs">
+                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5 text-amber-500" />}
+                    Transkrip Ulang (Groq AI)
                   </Button>
                 )}
               </div>

@@ -309,15 +309,35 @@ export async function adminUpsertTranscript(values: UpsertTranscriptInput) {
   });
 }
 
-export async function adminSignedAudioUrl(bucket?: string, path?: string, ttl = 3600): Promise<string | null> {
+export async function adminSignedAudioUrl(bucket?: string, audioPath?: string, ttl = 3600): Promise<string | null> {
   void bucket;
-  void path;
   void ttl;
-  return null;
+  if (!audioPath) return null;
+  if (audioPath.startsWith("http://") || audioPath.startsWith("https://")) return audioPath;
+  if (audioPath.startsWith("/")) return audioPath;
+  return `/${audioPath}`;
 }
 
-export async function adminDownloadAudio(bucket?: string, path?: string): Promise<Buffer> {
+export async function adminDownloadAudio(bucket?: string, audioPath?: string): Promise<Buffer> {
   void bucket;
-  void path;
-  throw new Error("Storage audio download will use storage provider");
+  if (!audioPath) throw new Error("Audio path is missing");
+
+  if (audioPath.startsWith("http://") || audioPath.startsWith("https://")) {
+    const res = await fetch(audioPath);
+    if (!res.ok) throw new Error(`Failed to fetch audio from URL: ${res.statusText}`);
+    const ab = await res.arrayBuffer();
+    return Buffer.from(ab);
+  }
+
+  const { promises: fs } = await import("fs");
+  const pathModule = await import("path");
+  const cleanPath = audioPath.replace(/^\/+/, "");
+
+  const publicPath = pathModule.join(process.cwd(), "public", cleanPath);
+  try {
+    return await fs.readFile(publicPath);
+  } catch {
+    const rootPath = pathModule.join(process.cwd(), cleanPath);
+    return await fs.readFile(rootPath);
+  }
 }

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { FileAudio, Loader2, Mic, Plus, Search, UploadCloud } from "lucide-react";
 import { FileDropzone } from "@/components/file-dropzone";
-import { createMeeting, requestMeetingUpload } from "../actions";
+import { uploadAndCreateMeeting } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,25 +114,21 @@ export function MeetingsView({ meetings, sttEnabled }: { meetings: MeetingVM[]; 
     setUploading(true);
     try {
       const durationSeconds = await readDuration(file);
-      const req = await requestMeetingUpload({ fileName: file.name, fileType: file.type });
-      if (!req?.ok) {
-        toast.error(req?.error.message ?? "Gagal menyiapkan upload.");
-        return;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("title", title.trim());
+      if (durationSeconds > 0) {
+        fd.append("durationSeconds", String(durationSeconds));
       }
-      const res = await createMeeting({
-        title: title.trim(),
-        path: req.data.path,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        durationSeconds,
-      });
+      const res = await uploadAndCreateMeeting(fd);
       if (!res?.ok) {
-        toast.error(res?.error.message ?? "Gagal menyimpan rekaman.");
+        toast.error(res?.error.message ?? "Gagal mengunggah dan menyimpan rekaman.");
         return;
       }
-      toast.success("Rekaman diunggah");
+      toast.success("Rekaman berhasil diunggah");
       router.push(`/meetings/${res.data.id}`);
+    } catch {
+      toast.error("Terjadi kesalahan saat mengunggah file.");
     } finally {
       setUploading(false);
     }
