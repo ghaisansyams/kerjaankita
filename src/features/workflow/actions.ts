@@ -14,6 +14,7 @@ import {
   setCompletedColumn,
   type RpcError,
 } from "@/repositories/workflow-column.repository";
+import { getProjectWorkflowId } from "@/repositories/workflow.repository";
 import {
   createColumnSchema,
   updateColumnSchema,
@@ -48,8 +49,13 @@ function revalidateBoard(projectId: string) {
 }
 
 export async function createBoardColumn(input: unknown): Promise<ActionResult> {
-  await requireOrgContext();
-  const parsed = createColumnSchema.safeParse(input);
+  const ctx = await requireOrgContext();
+  let raw = typeof input === "object" && input !== null ? { ...input as Record<string, unknown> } : {};
+  if ((!raw.workflowId || typeof raw.workflowId !== "string" || !raw.workflowId.trim()) && typeof raw.projectId === "string") {
+    const wfId = await getProjectWorkflowId(raw.projectId, ctx.organization.id);
+    if (wfId) raw.workflowId = wfId;
+  }
+  const parsed = createColumnSchema.safeParse(raw);
   if (!parsed.success) return actionError("VALIDATION", "Please check the column.", toFieldErrors(parsed.error));
   const d = parsed.data;
   const error = await createColumn(d.workflowId, d.name, d.color, d.weight);

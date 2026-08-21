@@ -334,6 +334,48 @@ async function main() {
     });
   }
 
+  // Ensure default task workflow and statuses exist for Spero Lab
+  let defaultWf = await prisma.workflow.findFirst({
+    where: { organizationId: org.id, entity: "task", isDefault: true },
+  });
+  if (!defaultWf) {
+    defaultWf = await prisma.workflow.create({
+      data: {
+        organizationId: org.id,
+        workspaceId: ws.id,
+        name: "Default Workflow",
+        entity: "task",
+        isDefault: true,
+        isSystem: true,
+      },
+    });
+
+    const defaultStatuses = [
+      { key: "backlog", name: "Backlog", category: "backlog", color: "#94A3B8", position: 0, isInitial: true, isFinal: false, autoProgress: 0 },
+      { key: "todo", name: "To Do", category: "todo", color: "#64748B", position: 1, isInitial: false, isFinal: false, autoProgress: 0 },
+      { key: "in_progress", name: "In Progress", category: "in_progress", color: "#3B82F6", position: 2, isInitial: false, isFinal: false, autoProgress: 50 },
+      { key: "review", name: "In Review", category: "review", color: "#F59E0B", position: 3, isInitial: false, isFinal: false, autoProgress: 80 },
+      { key: "done", name: "Done", category: "done", color: "#10B981", position: 4, isInitial: false, isFinal: true, autoProgress: 100 },
+    ];
+
+    for (const st of defaultStatuses) {
+      await prisma.workflowStatus.create({
+        data: {
+          organizationId: org.id,
+          workflowId: defaultWf.id,
+          key: `${st.key}_${Date.now().toString(36)}`,
+          name: st.name,
+          category: st.category as any,
+          color: st.color,
+          position: st.position,
+          isInitial: st.isInitial,
+          isFinal: st.isFinal,
+          autoProgress: st.autoProgress,
+        },
+      });
+    }
+  }
+
   const defaultPassword = "Password123!";
   const passwordHash = await bcrypt.hash(defaultPassword, 10);
 

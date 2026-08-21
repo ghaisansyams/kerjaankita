@@ -11,6 +11,7 @@ import {
   updateProjectSchema,
 } from "@/schemas/project.schema";
 import * as projectRepo from "@/repositories/project.repository";
+import { getDefaultTaskWorkflowId } from "@/repositories/workflow.repository";
 import { logActivity } from "@/repositories/activity.repository";
 import { toFieldErrors } from "@/lib/validation";
 import { mapUnknownError } from "@/lib/errors";
@@ -35,10 +36,12 @@ export async function createProject(
   }
   try {
     const id = crypto.randomUUID();
+    const defaultWorkflowId = await getDefaultTaskWorkflowId(ctx.organization.id);
     await projectRepo.insertProject({
       id,
       organizationId: ctx.organization.id,
       workspaceId: d.workspaceId,
+      workflowId: defaultWorkflowId,
       name: d.name,
       accountId: d.accountId ?? null,
       ownerId: d.ownerId ?? ctx.profile.id,

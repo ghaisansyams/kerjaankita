@@ -86,7 +86,7 @@ export async function listTaskWorkflows(orgId: string) {
 
 /** The organization's default task workflow id. */
 export async function getDefaultTaskWorkflowId(orgId: string) {
-  const wf = await prisma.workflow.findFirst({
+  let wf = await prisma.workflow.findFirst({
     where: {
       organizationId: orgId,
       entity: "task",
@@ -95,5 +95,60 @@ export async function getDefaultTaskWorkflowId(orgId: string) {
     },
     select: { id: true },
   });
-  return wf?.id ?? null;
+
+  if (!wf) {
+    wf = await prisma.workflow.findFirst({
+      where: {
+        organizationId: orgId,
+        entity: "task",
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+  }
+
+  if (!wf) {
+    try {
+      const newWf = await prisma.workflow.create({
+        data: {
+          organizationId: orgId,
+          name: "Default Workflow",
+          entity: "task",
+          isDefault: true,
+          isSystem: true,
+        },
+      });
+
+      const defaultStatuses = [
+        { key: "backlog", name: "Backlog", category: "backlog", color: "#94A3B8", position: 0, isInitial: true, isFinal: false, autoProgress: 0 },
+        { key: "todo", name: "To Do", category: "todo", color: "#64748B", position: 1, isInitial: false, isFinal: false, autoProgress: 0 },
+        { key: "in_progress", name: "In Progress", category: "in_progress", color: "#3B82F6", position: 2, isInitial: false, isFinal: false, autoProgress: 50 },
+        { key: "review", name: "In Review", category: "review", color: "#F59E0B", position: 3, isInitial: false, isFinal: false, autoProgress: 80 },
+        { key: "done", name: "Done", category: "done", color: "#10B981", position: 4, isInitial: false, isFinal: true, autoProgress: 100 },
+      ];
+
+      for (const st of defaultStatuses) {
+        await prisma.workflowStatus.create({
+          data: {
+            organizationId: orgId,
+            workflowId: newWf.id,
+            key: `${st.key}_${Date.now().toString(36)}`,
+            name: st.name,
+            category: st.category as any,
+            color: st.color,
+            position: st.position,
+            isInitial: st.isInitial,
+            isFinal: st.isFinal,
+            autoProgress: st.autoProgress,
+          },
+        });
+      }
+
+      return newWf.id;
+    } catch {
+      return null;
+    }
+  }
+
+  return wf.id;
 }
