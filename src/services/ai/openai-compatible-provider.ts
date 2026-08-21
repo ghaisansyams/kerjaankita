@@ -21,13 +21,25 @@ export class OpenAICompatibleProvider implements AiProvider {
   readonly name = "openai-compatible";
 
   private get baseUrl(): string {
-    return (process.env.OPENAI_COMPATIBLE_BASE_URL || "https://ai.hajid.dev/v1").replace(/\/+$/, "");
+    if (process.env.GROQ_API_KEY && !process.env.OPENAI_COMPATIBLE_BASE_URL) {
+      return "https://api.groq.com/openai/v1";
+    }
+    return (process.env.GROQ_BASE_URL || process.env.OPENAI_COMPATIBLE_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
   }
   private get model(): string {
-    return process.env.OPENAI_COMPATIBLE_MODEL || "ocg/glm-5.2";
+    if (process.env.GROQ_API_KEY && !process.env.OPENAI_COMPATIBLE_MODEL) {
+      return process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    }
+    return process.env.OPENAI_COMPATIBLE_MODEL || "llama-3.3-70b-versatile";
   }
   private get apiKey(): string {
-    return process.env.OPENAI_COMPATIBLE_API_KEY ?? "";
+    return (
+      process.env.GROQ_API_KEY ||
+      process.env.GROQ_APIKEY ||
+      process.env.OPENAI_COMPATIBLE_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      ""
+    ).trim();
   }
   private get visionEnabled(): boolean {
     return (process.env.OPENAI_COMPATIBLE_VISION || "auto").trim().toLowerCase() !== "off";

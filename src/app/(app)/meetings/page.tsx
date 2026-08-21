@@ -3,6 +3,7 @@ import { listMeetingRecords } from "@/repositories/meeting.repository";
 import { transcriptionConfigured } from "@/services/ai/transcribe";
 import { MeetingsView, type MeetingVM } from "@/features/meetings/components/meetings-view";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "AI Meeting Assistant" };
 
 export default async function MeetingsPage() {

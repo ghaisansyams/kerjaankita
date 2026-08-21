@@ -10,6 +10,7 @@ export * from "./types";
 const registry: Record<string, AiProvider> = {
   anthropic: new AnthropicProvider(),
   "openai-compatible": new OpenAICompatibleProvider(),
+  groq: new OpenAICompatibleProvider(),
 };
 
 /**

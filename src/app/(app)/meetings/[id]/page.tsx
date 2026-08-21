@@ -8,6 +8,7 @@ import {
 import { transcriptionConfigured } from "@/services/ai/transcribe";
 import { MeetingDetail } from "@/features/meetings/components/meeting-detail";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Meeting — AI Meeting Assistant" };
 
 export default async function MeetingDetailPage({
