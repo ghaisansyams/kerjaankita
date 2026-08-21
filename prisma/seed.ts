@@ -2,6 +2,7 @@ import { PrismaClient, RoleScope, PriorityLevel } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -299,6 +300,121 @@ async function main() {
     }
   }
   console.log("✅ Seeded project templates");
+
+  // 6. Organization & Initial Team Members
+  const itInd = await prisma.industry.findUnique({ where: { key: "it_services" } });
+  let org = await prisma.organization.findUnique({ where: { slug: "spero-lab" } });
+  if (!org) {
+    org = await prisma.organization.create({
+      data: {
+        name: "Spero Lab",
+        slug: "spero-lab",
+        industryId: itInd?.id,
+        plan: "pro",
+      },
+    });
+    await prisma.organizationSetting.create({
+      data: {
+        organizationId: org.id,
+      },
+    });
+  }
+
+  let ws = await prisma.workspace.findFirst({
+    where: { organizationId: org.id, isDefault: true },
+  });
+  if (!ws) {
+    ws = await prisma.workspace.create({
+      data: {
+        organizationId: org.id,
+        name: "Main Workspace",
+        slug: "main",
+        isDefault: true,
+      },
+    });
+  }
+
+  const defaultPassword = "Password123!";
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+  const teamMembers = [
+    { email: "dio@spero.id", fullName: "Galih Aldio Putra", roleKey: "org_owner", wsRoleKey: "ws_admin" },
+    { email: "fikri@spero.id", fullName: "Fikri Hasani", roleKey: "org_admin", wsRoleKey: "ws_admin" },
+    { email: "hajid@spero.id", fullName: "Hajid Al Akhtar", roleKey: "org_manager", wsRoleKey: "ws_member" },
+    { email: "aji@spero.id", fullName: "Aji", roleKey: "org_member", wsRoleKey: "ws_member" },
+  ];
+
+  for (const m of teamMembers) {
+    let profile = await prisma.profile.findFirst({
+      where: { email: { equals: m.email, mode: "insensitive" } },
+    });
+
+    if (!profile) {
+      profile = await prisma.profile.create({
+        data: {
+          id: crypto.randomUUID(),
+          email: m.email,
+          fullName: m.fullName,
+          passwordHash,
+          isActive: true,
+        },
+      });
+    } else {
+      profile = await prisma.profile.update({
+        where: { id: profile.id },
+        data: {
+          passwordHash,
+          fullName: m.fullName,
+          isActive: true,
+        },
+      });
+    }
+
+    const orgRole = roleMap.get(m.roleKey);
+    if (orgRole) {
+      const existingMember = await prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: org.id, userId: profile.id } },
+      });
+      if (existingMember) {
+        await prisma.organizationMember.update({
+          where: { id: existingMember.id },
+          data: { roleId: orgRole, status: "active" },
+        });
+      } else {
+        await prisma.organizationMember.create({
+          data: {
+            organizationId: org.id,
+            userId: profile.id,
+            roleId: orgRole,
+            status: "active",
+          },
+        });
+      }
+    }
+
+    const wsRole = roleMap.get(m.wsRoleKey);
+    if (wsRole && ws) {
+      const existingWsMember = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: ws.id, userId: profile.id } },
+      });
+      if (existingWsMember) {
+        await prisma.workspaceMember.update({
+          where: { id: existingWsMember.id },
+          data: { roleId: wsRole },
+        });
+      } else {
+        await prisma.workspaceMember.create({
+          data: {
+            organizationId: org.id,
+            workspaceId: ws.id,
+            userId: profile.id,
+            roleId: wsRole,
+          },
+        });
+      }
+    }
+  }
+  console.log("✅ Seeded initial team accounts with password:", defaultPassword);
 
   console.log("✨ Seed completed successfully!");
 }
